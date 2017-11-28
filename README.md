@@ -33,14 +33,17 @@ $ cargo build
 
 ## Run Xim
 
+Test with
+
 ```
 $ cargo run -- <file>
 ```
 
-or
+or build in release mode
 
 ```
-$ ./target/debug/xim <file>
+$ cargo build --release
+$ ./target/release/xim <file>
 ```
 
 # Usecases
