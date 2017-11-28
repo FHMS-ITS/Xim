@@ -54,6 +54,8 @@ $ ./target/debug/xim <file>
 * [x] Statusbar (State, Position)
 * [x] Move
 * [x] Jump
+* [ ] Jump to Start/End `gg`, `G`
+* [ ] Relative Jumps
 * [x] Scroll
 * [x] Insert
 * [x] Delete
