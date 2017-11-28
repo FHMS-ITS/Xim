@@ -130,10 +130,18 @@ impl Controller {
 
     pub fn remove_left(&mut self) {
         let index = self.model.get_index();
+
+        // If cursor is at end, deleting will move the cursor to the left since the range updates automatically...
+        let end = index == self.model.buffer.len();
+
         if let Err(e) = self.model.edit(index.saturating_sub(1), index, &[]) {
             self.view.status_view.set_body(&format!("could not remove value ({})", e));
         }
-        self.model.dec_index(1);
+
+        // ...thus do not move again. (TODO: Refactor)
+        if !end {
+            self.model.dec_index(1);
+        }
     }
 
     pub fn remove_right(&mut self) {
