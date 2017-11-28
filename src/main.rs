@@ -1,4 +1,5 @@
 extern crate xim;
+use xim::{App, Config};
 use xim::model::*;
 use xim::view::*;
 use xim::controller::*;
@@ -43,10 +44,7 @@ struct Args {
     arg_file: String,
 }
 
-struct Config {
-    pub file: String,
-}
-
+// How to translate main::Args to a xim::Config?
 impl From<Args> for Config {
     fn from(args: Args) -> Self {
         Config {
@@ -101,8 +99,7 @@ fn run() -> Result<(), Box<Error>> {
         // Receive window changed events
         let send_1 = send.clone();
         thread::spawn(move || {
-            loop {
-                signal_winch.recv().unwrap();
+            for _ in signal_winch.iter() {
                 send_1.send(Event::Resize(termion::terminal_size().unwrap())).unwrap();
             }
         });
@@ -118,21 +115,10 @@ fn run() -> Result<(), Box<Error>> {
         recv
     };
 
-    let mut ctrl = {
-        let model = Model::new();
-
-        let view = {
-            let hex_view = HexView::new(stdout.clone());
-            let status_view = StatusView::new(stdout.clone());
-
-            View {
-                hex_view,
-                status_view,
-            }
-        };
-
-        Controller::new(model, view)
-    };
+    let mut ctrl = Controller::new(
+        Model::new(),
+        View::new(stdout.clone())
+    );
 
     setup_terminal(stdout.clone())?;
 

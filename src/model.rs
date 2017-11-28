@@ -123,15 +123,6 @@ impl Model {
         }
     }
 
-    pub fn set_index_aligned(&mut self) {
-        match self.caret {
-            Index(ref mut index) |
-            Offset(ref mut index) |
-            Replace(ref mut index) |
-            Visual(_, ref mut index) => *index -= (*index % 16).into(),
-        }
-    }
-
     pub fn inc_index(&mut self, value: usize) {
         match self.caret {
             Index(ref mut index) |

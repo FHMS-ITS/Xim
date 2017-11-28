@@ -1,11 +1,11 @@
 use super::view::*;
 use super::model::*;
-use super::{Caret, char_is_hex, char_to_hex};
+use super::{Caret, Hex};
 use super::vim::{VimState, VimCommand};
 
+use std::mem::swap;
 use termion;
 use termion::event::Key;
-use std::mem::swap;
 
 pub struct Controller {
     pub state: VimState,
@@ -106,7 +106,8 @@ impl Controller {
     }
 
     pub fn set_index_aligned(&mut self) {
-        self.model.set_index_aligned();
+        let index = self.model.get_index();
+        self.model.set_index(index - (index % 16));
     }
 
     pub fn get_index(&self) -> usize {
@@ -168,7 +169,11 @@ impl Controller {
     }
 
     pub fn update_view(&mut self) {
-        self.view.draw(&self.model);
+        if let Err(error) = self.view.draw(&self.model) {
+            // What to do when drawing failed?
+            // Try to report this on stderr and ignore further failures.
+            let _ = eprintln!("{}", error);
+        }
     }
 
     // Transitions
@@ -278,8 +283,8 @@ impl Controller {
                         self.model.snapshot();
                         Insert1
                     }
-                    Char(a) if char_is_hex(a) => {
-                        Insert2(char_to_hex(a).unwrap())
+                    Char(a) if a.is_hex() => {
+                        Insert2(a.to_hex().unwrap())
                     },
                     Insert => {
                         self.into_replace_mode();
@@ -294,8 +299,8 @@ impl Controller {
             }
             Insert2(a) => {
                 match key {
-                    Char(b) if char_is_hex(b) => {
-                        self.insert(16*a + char_to_hex(b).unwrap());
+                    Char(b) if b.is_hex() => {
+                        self.insert(16*a + b.to_hex().unwrap());
                         self.model.snapshot();
                         Insert1
                     }
@@ -308,8 +313,8 @@ impl Controller {
             }
             Replace1 => {
                 match key {
-                    Char(a) if char_is_hex(a) => {
-                        Replace2(char_to_hex(a).unwrap())
+                    Char(a) if a.is_hex() => {
+                        Replace2(a.to_hex().unwrap())
                     },
                     Esc | Alt('\u{1b}') => { //Quickfix for tmux
                         self.into_normal_mode();
@@ -320,9 +325,9 @@ impl Controller {
             }
             Replace2(a) => {
                 match key {
-                    Char(b) if char_is_hex(b) => {
+                    Char(b) if b.is_hex() => {
                         self.into_normal_mode();
-                        self.replace(16*a + char_to_hex(b).unwrap());
+                        self.replace(16*a + b.to_hex().unwrap());
                         self.model.snapshot();
                         Normal
                     }
@@ -339,8 +344,8 @@ impl Controller {
                         self.make_move(key);
                         ReplaceMany1
                     }
-                    Char(a) if char_is_hex(a) => {
-                        ReplaceMany2(char_to_hex(a).unwrap())
+                    Char(a) if a.is_hex() => {
+                        ReplaceMany2(a.to_hex().unwrap())
                     },
                     Esc | Alt('\u{1b}') => { //Quickfix for tmux
                         self.into_normal_mode();
@@ -351,8 +356,8 @@ impl Controller {
             }
             ReplaceMany2(a) => {
                 match key {
-                    Char(b) if char_is_hex(b) => {
-                        self.replace(16*a + char_to_hex(b).unwrap());
+                    Char(b) if b.is_hex() => {
+                        self.replace(16*a + b.to_hex().unwrap());
                         self.model.snapshot();
                         self.make_move(Right);
                         ReplaceMany1
@@ -369,6 +374,11 @@ impl Controller {
                     Left | Right | Up | Down | Char('h') | Char('l') | Char('k') | Char('j') => {
                         self.make_move(key);
                         Visual
+                    },
+                    Char('y') => {
+                        self.view.status_view.set_body("yank not implemented yet");
+                        self.into_normal_mode();
+                        Normal
                     },
                     Char('o') => {
                         if let Caret::Visual(ref mut start, ref mut end) = self.model.caret {

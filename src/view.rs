@@ -1,19 +1,43 @@
+use super::{Ascii, align, align_top, Caret};
 use super::model::Model;
-use super::{Caret, char_to_ascii_printable, range_to_marker};
 
-use std::io::{Write, Stdout};
-use termion;
-use termion::color;
+use std::cell::RefCell;
+use std::cmp::{min, max};
+use std::io::{Write, Result as IoResult, Stdout};
+use std::mem::swap;
+use std::rc::Rc;
+
+use termion::clear::{All as ClearAll, CurrentLine as ClearCurrentLine};
+use termion::color::{Fg, Red, Reset as ColorReset};
 use termion::cursor::Goto;
 use termion::raw::RawTerminal;
-use std::cell::RefCell;
-use std::rc::Rc;
 use termion::screen::AlternateScreen;
+use termion::style::{Bold, Invert, NoInvert, Underline, Reset as StyleReset};
 
 pub type RawStdout = Rc<RefCell<AlternateScreen<RawTerminal<Stdout>>>>;
 
-pub trait Draw {
-    fn draw(&self, stdout: &mut RawStdout, area: DrawArea);
+fn chunks_indices(mut start: u16, end: u16, size: u16) -> Vec<(u16, u16)> {
+    let mut result = Vec::with_capacity(((end - start) / 16) as usize);
+
+    while start <= end {
+        result.push((start, min(start + size - 1, end)));
+        start += size;
+    }
+
+    result
+}
+
+pub fn range_to_marker(mut start: u16, mut end: u16) -> Vec<(u16, u16, u16)> {
+    if start > end {
+        swap(&mut start, &mut end);
+    };
+
+    let lines = (start/16..end/16 + 1).collect::<Vec<_>>();
+    let mut spans = chunks_indices(align(start, 16), align_top(end, 16), 16);
+    spans.first_mut().unwrap().0 += start;
+    spans.last_mut().unwrap().1 = end % 16;
+
+    lines.iter().zip(spans.iter()).map(|(line, &(x, y))| (*line, x % 16, y % 16)).collect()
 }
 
 pub struct DrawArea {
@@ -22,18 +46,59 @@ pub struct DrawArea {
 }
 
 pub struct View {
+    area: DrawArea,
+    stdout: RawStdout,
     pub hex_view: HexView,
     pub status_view: StatusView,
 }
 
 impl View {
-    pub fn draw(&self, model: &Model) {
-        self.hex_view.draw(model);
-        self.status_view.draw();
+    pub fn new(stdout: RawStdout) -> View {
+        let hex_view = HexView::new(stdout.clone());
+        let status_view = StatusView::new(stdout.clone());
+
+        View {
+            area: DrawArea {
+                origin: (1, 1),
+                dimens: (16, 16),
+            },
+            stdout: stdout,
+            hex_view,
+            status_view,
+        }
+    }
+
+    pub fn draw(&self, model: &Model) -> IoResult<()> {
+        // limit scope of stdout here, because hex_view and status_view have their own reference.
+        {
+            let mut stdout = self.stdout.borrow_mut();
+
+            // TODO: Better redraw only the dirty parts (ClearAll causes the flickering.)
+            write!(stdout, "{}", ClearAll).unwrap();
+
+            write!(stdout, "{}", Fg(Red))?;
+            for line in 1..(self.area.dimens.1 - 1) {
+                write!(stdout, "{}~", Goto(1, line))?;
+            }
+            write!(stdout, "{}", Fg(ColorReset))?;
+        }
+
+        self.hex_view.draw(model)?;
+        self.status_view.draw()?;
+
+        Ok(())
     }
 
     pub fn set_area(&mut self, area: DrawArea) {
         let DrawArea { origin: (x, y), dimens: (w, h) } = area;
+
+        // Set mimimum width/height to avoid overfow
+        let (w, h) = (max(w, 75), max(h, 4));
+
+        self.area = DrawArea {
+            origin: (x, y),
+            dimens: (w, h),
+        };
 
         self.hex_view.set_area(DrawArea {
             origin: (x, y),
@@ -42,7 +107,7 @@ impl View {
 
         self.status_view.set_area(DrawArea {
             origin: (x, y + h - 2),
-            dimens: (w, 1),
+            dimens: (w, 2),
         });
     }
 }
@@ -69,6 +134,98 @@ impl HexView {
         self.area = area;
     }
 
+    pub fn draw(&self, model: &Model) -> IoResult<()> {
+        let mut stdout = self.stdout.borrow_mut();
+
+        let DrawArea { origin: (x, y), dimens: (w, h) } = self.area;
+        let offset_area = DrawArea { origin: (x, y+1), dimens: (8, h), };
+        let hex_area = DrawArea {origin: (offset_area.origin.0 + offset_area.dimens.0 + 2, y+1), dimens: (16*2 + 15, h), };
+        let ascii_area = DrawArea { origin: (hex_area.origin.0 + hex_area.dimens.0 + 2, y+1), dimens: (16, h) };
+
+        if model.buffer.len() == 0 {
+            let msg = "empty file: go into insert mode and insert some bytes";
+            write!(stdout, "{}{}", Goto(w / 2 - (msg.len() as u16 / 2), h / 2), msg).unwrap();
+
+            return Ok(());
+        }
+
+        // Draw indices
+        write!(stdout, "{}", Fg(Red))?;
+        write!(stdout, "{}{}", Goto(12, 1), "0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f")?;
+        write!(stdout, "{}", Fg(ColorReset))?;
+
+        for (line, chunk) in model.buffer[self.scroll_pos..].chunks(16).take(h as usize).enumerate() {
+            let offset = line * 16;
+            let line = line as u16;
+
+            // Draw offsets
+            write!(stdout, "{}{}{:08x}: {}", Goto(offset_area.origin.0, offset_area.origin.1 + line), Fg(Red), offset + self.scroll_pos, Fg(ColorReset)).unwrap();
+
+            // Draw hex values
+            write!(stdout, "{}", Goto(hex_area.origin.0, hex_area.origin.1 + line)).unwrap();
+            for byte in chunk {
+                write!(stdout, "{:02x} ", byte).unwrap();
+            }
+
+            // Draw ascii values
+            write!(stdout, "{}", Goto(ascii_area.origin.0, ascii_area.origin.1 + line)).unwrap();
+            for byte in chunk {
+                write!(stdout, "{}", byte.to_printable()).unwrap();
+            }
+        }
+
+        // Draw Caret
+        match model.caret {
+            Caret::Index(index) => {
+                let index = usize::from(index);
+                write!(stdout, "{}{}", Goto(hex_area.origin.0 + ((index % 16) as u16) * 3 - 1, hex_area.origin.1 + ((index - self.scroll_pos) / 16) as u16), "|").unwrap();
+
+                let value = if index < model.buffer.len() {
+                    model.buffer[index].to_printable()
+                } else {
+                    ' '
+                };
+                write!(stdout, "{}{}{}{}", Goto(ascii_area.origin.0 + ((index % 16) as u16), ascii_area.origin.1 + ((index - self.scroll_pos) / 16) as u16), Underline, value, StyleReset).unwrap();
+            },
+            Caret::Offset(index) => {
+                let index = usize::from(index);
+                let byte = model.buffer[index];
+                write!(stdout, "{}{}{:02x}{}", Goto(hex_area.origin.0 + ((index % 16) as u16) * 3, hex_area.origin.1 + ((index - self.scroll_pos) / 16) as u16), Invert, byte, StyleReset).unwrap();
+                write!(stdout, "{}{}{}{}", Goto(ascii_area.origin.0 + ((index % 16) as u16), ascii_area.origin.1 + ((index - self.scroll_pos) / 16) as u16), Underline, byte.to_printable(), StyleReset).unwrap();
+            },
+            Caret::Replace(index) => {
+                let index = usize::from(index);
+                let byte = model.buffer[index];
+                write!(stdout, "{}{}{:02x}{}", Goto(hex_area.origin.0 + ((index % 16) as u16) * 3, hex_area.origin.1 + ((index - self.scroll_pos) / 16) as u16), Underline, byte, StyleReset).unwrap();
+                write!(stdout, "{}{}{}{}", Goto(ascii_area.origin.0 + ((index % 16) as u16), ascii_area.origin.1 + ((index - self.scroll_pos) / 16) as u16), Underline, byte.to_printable(), StyleReset).unwrap();
+            },
+            Caret::Visual(start, end) => {
+                let start = usize::from(start);
+                let end = usize::from(end);
+                let rel_start = (start - self.scroll_pos) as u16;
+                let rel_end = (end - self.scroll_pos) as u16;
+
+                let lines = range_to_marker(rel_start, rel_end);
+
+                for &(line, s, e) in lines.iter().take(h as usize) {
+                    for no in s..e {
+                        let byte = model.buffer[no as usize + line as usize *16 + self.scroll_pos];
+                        write!(stdout, "{}{}{:02x} {}", Goto(hex_area.origin.0 + no * 3, hex_area.origin.1 + line), Invert, byte, StyleReset).unwrap();
+                        write!(stdout, "{}{}{}{}", Goto(ascii_area.origin.0 + no, ascii_area.origin.1 + line), Underline, byte.to_printable(), StyleReset).unwrap();
+                    }
+                    let byte = model.buffer[e as usize + line as usize * 16 + self.scroll_pos];
+                    write!(stdout, "{}{}{:02x}{}", Goto(hex_area.origin.0 + e * 3, hex_area.origin.1 + line), Invert, byte, StyleReset).unwrap();
+                    write!(stdout, "{}{}{}{}", Goto(ascii_area.origin.0 + e, ascii_area.origin.1 + line), Underline, byte.to_printable(), StyleReset).unwrap();
+                }
+
+                let byte = model.buffer[end];
+                write!(stdout, "{}{}{}{:02x}{}", Goto(hex_area.origin.0 + ((end % 16) as u16) * 3, hex_area.origin.1 + ((end - self.scroll_pos) / 16) as u16), Invert, Bold, byte, StyleReset).unwrap();
+            },
+        }
+
+        Ok(())
+    }
+
     pub fn scroll_to(&mut self, index: usize) {
         let DrawArea { origin: (_, _), dimens: (_, h) } = self.area;
 
@@ -80,98 +237,6 @@ impl HexView {
             self.scroll_pos = index * 16;
         } else if index > end {
             self.scroll_pos = (index - (h as usize - 1)) * 16;
-        }
-    }
-
-    pub fn draw(&self, model: &Model) {
-        let mut stdout = self.stdout.borrow_mut();
-
-        let DrawArea { origin: (x, y), dimens: (w, h) } = self.area;
-        let offset_area = DrawArea { origin: (x, y+1), dimens: (8, h), };
-        let hex_area = DrawArea {origin: (offset_area.origin.0 + offset_area.dimens.0 + 2, y+1), dimens: (16*2 + 15, h), };
-        let ascii_area = DrawArea { origin: (hex_area.origin.0 + hex_area.dimens.0 + 2, y+1), dimens: (16, h) };
-
-        // FIXME: DEBUG
-        write!(stdout, "{}", termion::clear::All).unwrap();
-
-        if model.buffer.len() == 0 {
-            let msg = "empty file: go into insert mode and insert some bytes";
-            write!(stdout, "{}{}", Goto(w / 2 - (msg.len() as u16 / 2), h / 2), msg).unwrap();
-            return;
-        }
-
-        // Draw Indices
-        write!(stdout, "{}{}{}{}", Goto(1, 1), color::Fg(color::Red), "~          0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f", color::Fg(color::Reset)).unwrap();
-
-        for (line, chunk) in model.buffer[self.scroll_pos..].chunks(16).take(h as usize).enumerate() {
-            // Draw Offset
-            write!(stdout, "{}{}{:08x}: {}", Goto(offset_area.origin.0, offset_area.origin.1 + line as u16), color::Fg(color::Red), (line as usize) * 16 + self.scroll_pos, color::Fg(color::Reset)).unwrap();
-
-            // Draw Hex Line
-            write!(stdout, "{}", Goto(hex_area.origin.0, hex_area.origin.1 + line as u16)).unwrap();
-            for byte in chunk {
-                write!(stdout, "{:02x} ", byte).unwrap();
-            }
-
-            // Draw Ascii Line
-            write!(stdout, "{}", Goto(ascii_area.origin.0, ascii_area.origin.1 + line as u16)).unwrap();
-            for byte in chunk {
-                write!(stdout, "{}", char_to_ascii_printable(*byte)).unwrap();
-            }
-        }
-
-        // Draw Tildes
-        for line in (model.buffer[self.scroll_pos..].chunks(16).take(h as usize).len() as u16)..(offset_area.dimens.1 as u16) {
-            write!(stdout, "{}{}{}~{}", Goto(offset_area.origin.0, offset_area.origin.1 + line as u16), termion::clear::CurrentLine, color::Fg(color::Red), color::Fg(color::Reset)).unwrap();
-        }
-
-        // Draw Caret
-        match model.caret {
-            Caret::Index(index) => {
-                let index = usize::from(index);
-                write!(stdout, "{}{}", Goto(hex_area.origin.0 + ((index % 16) as u16) * 3 - 1, hex_area.origin.1 + ((index - self.scroll_pos) / 16) as u16), "|").unwrap();
-
-                let value = if index < model.buffer.len() {
-                    char_to_ascii_printable(model.buffer[index])
-                } else {
-                    ' '
-                };
-                write!(stdout, "{}{}{}{}", Goto(ascii_area.origin.0 + ((index % 16) as u16), ascii_area.origin.1 + ((index - self.scroll_pos) / 16) as u16), termion::style::Underline, value, termion::style::Reset).unwrap();
-            },
-            Caret::Offset(index) => {
-                let index = usize::from(index);
-                let byte = model.buffer[index];
-                write!(stdout, "{}{}{:02x}{}", Goto(hex_area.origin.0 + ((index % 16) as u16) * 3, hex_area.origin.1 + ((index - self.scroll_pos) / 16) as u16), termion::style::Invert, byte, termion::style::Reset).unwrap();
-                write!(stdout, "{}{}{}{}", Goto(ascii_area.origin.0 + ((index % 16) as u16), ascii_area.origin.1 + ((index - self.scroll_pos) / 16) as u16), termion::style::Underline, char_to_ascii_printable(byte), termion::style::Reset).unwrap();
-            },
-            Caret::Replace(index) => {
-                let index = usize::from(index);
-                let byte = model.buffer[index];
-                write!(stdout, "{}{}{:02x}{}", Goto(hex_area.origin.0 + ((index % 16) as u16) * 3, hex_area.origin.1 + ((index - self.scroll_pos) / 16) as u16), termion::style::Underline, byte, termion::style::Reset).unwrap();
-                write!(stdout, "{}{}{}{}", Goto(ascii_area.origin.0 + ((index % 16) as u16), ascii_area.origin.1 + ((index - self.scroll_pos) / 16) as u16), termion::style::Underline, char_to_ascii_printable(byte), termion::style::Reset).unwrap();
-            },
-            Caret::Visual(start, end) => {
-                let start = usize::from(start);
-                let end = usize::from(end);
-                let rel_start = (start - self.scroll_pos) as u16;
-                let rel_end = (end - self.scroll_pos) as u16;
-
-                let lines = range_to_marker(rel_start, rel_end);
-
-                for (line, s, e) in lines {
-                    for no in s..e {
-                        let byte = model.buffer[no as usize + line as usize *16 + self.scroll_pos];
-                        write!(stdout, "{}{}{:02x} {}", Goto(hex_area.origin.0 + no * 3, hex_area.origin.1 + line), termion::style::Invert, byte, termion::style::Reset).unwrap();
-                        write!(stdout, "{}{}{}{}", Goto(ascii_area.origin.0 + no, ascii_area.origin.1 + line), termion::style::Underline, char_to_ascii_printable(byte), termion::style::Reset).unwrap();
-                    }
-                    let byte = model.buffer[e as usize + line as usize * 16 + self.scroll_pos];
-                    write!(stdout, "{}{}{:02x}{}", Goto(hex_area.origin.0 + e * 3, hex_area.origin.1 + line), termion::style::Invert, byte, termion::style::Reset).unwrap();
-                    write!(stdout, "{}{}{}{}", Goto(ascii_area.origin.0 + e, ascii_area.origin.1 + line), termion::style::Underline, char_to_ascii_printable(byte), termion::style::Reset).unwrap();
-                }
-
-                let byte = model.buffer[end];
-                write!(stdout, "{}{}{}{:02x}{}", Goto(hex_area.origin.0 + ((end % 16) as u16) * 3, hex_area.origin.1 + ((end - self.scroll_pos) / 16) as u16), termion::style::Invert, termion::style::Bold, byte, termion::style::Reset).unwrap();
-            },
         }
     }
 }
@@ -214,20 +279,18 @@ impl StatusView {
         self.area = area;
     }
 
-    pub fn draw(&self) {
+    pub fn draw(&self) -> IoResult<()> {
         let mut stdout = self.stdout.borrow_mut();
-
-        use termion::cursor::Goto;
-        use termion::clear::CurrentLine;
-        use termion::style::{Invert, NoInvert};
 
         let DrawArea { origin: (x, y), dimens: (w, _) } = self.area;
 
-        write!(stdout, "{}{}{}{}{}", Goto(x, y), CurrentLine, Invert, format!("{:<pad$}", self.head, pad=(w as usize)), NoInvert).unwrap();
-        write!(stdout, "{}{}{}", Goto(x, y + 1), CurrentLine, self.body).unwrap();
+        write!(stdout, "{}{}{}{}{}", Goto(x, y), ClearCurrentLine, Invert, format!("{:<pad$}", self.head, pad=(w as usize)), NoInvert)?;
+        write!(stdout, "{}{}{}", Goto(x, y + 1), ClearCurrentLine, self.body)?;
         let offset_msg = format!("0x{:x} ({})", self.index, self.index);
-        write!(stdout, "{}{}", Goto(x + w/2 - (offset_msg.len() as u16 / 2), y + 1), offset_msg).unwrap();
+        write!(stdout, "{}{}", Goto(x + w/2 - (offset_msg.len() as u16 / 2), y + 1), offset_msg)?;
 
-        stdout.flush().unwrap();
+        stdout.flush()?;
+
+        Ok(())
     }
 }
