@@ -1,0 +1,19 @@
+[package]
+name = "xim"
+version = "0.1.0"
+authors = ["Damian Poddebniak <damian.poddebniak@fh-muenster.de>"]
+
+[dependencies]
+docopt       = "*"
+serde        = "*"
+serde_derive = "*"
+termion      = "*"
+chan         = "*"
+chan-signal  = "*"
+clippy       = {version = "*", optional = true}
+
+[dev-dependencies]
+quickcheck   = "*"
+
+[features]
+default = []
