@@ -101,8 +101,7 @@ fn run() -> Result<(), Box<Error>> {
         // Receive window changed events
         let send_1 = send.clone();
         thread::spawn(move || {
-            loop {
-                signal_winch.recv().unwrap();
+            for _ in signal_winch.iter() {
                 send_1.send(Event::Resize(termion::terminal_size().unwrap())).unwrap();
             }
         });

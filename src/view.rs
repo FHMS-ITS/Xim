@@ -9,6 +9,7 @@ use termion::raw::RawTerminal;
 use std::cell::RefCell;
 use std::rc::Rc;
 use termion::screen::AlternateScreen;
+use std::cmp::max;
 
 pub type RawStdout = Rc<RefCell<AlternateScreen<RawTerminal<Stdout>>>>;
 
@@ -34,6 +35,9 @@ impl View {
 
     pub fn set_area(&mut self, area: DrawArea) {
         let DrawArea { origin: (x, y), dimens: (w, h) } = area;
+
+        // Set mimimum width/height to avoid overfow
+        let (w, h) = (max(w, 75), max(h, 4));
 
         self.hex_view.set_area(DrawArea {
             origin: (x, y),
