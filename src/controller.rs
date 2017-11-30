@@ -176,7 +176,7 @@ impl Controller {
     // TODO: Refactor into VimStateMachine
     pub fn transition(&mut self, key: Key) -> bool {
         use self::VimState::*;
-        use termion::event::Key::{Char, Esc, Delete, Backspace, Left, Right, Up, Down, Insert, Ctrl};
+        use termion::event::Key::{Alt, Char, Esc, Delete, Backspace, Left, Right, Up, Down, Insert, Ctrl};
 
         let mut run = true;
 
@@ -255,7 +255,7 @@ impl Controller {
                         }
                         Normal
                     }
-                    Esc => {
+                    Esc | Alt('\u{1b}') => { //Quickfix for tmux
                         self.into_normal_mode();
                         Normal
                     }
@@ -285,7 +285,7 @@ impl Controller {
                         self.into_replace_mode();
                         ReplaceMany1
                     }
-                    Esc => {
+                    Esc | Alt('\u{1b}') => { //Quickfix for tmux
                         self.into_normal_mode();
                         Normal
                     },
@@ -299,7 +299,7 @@ impl Controller {
                         self.model.snapshot();
                         Insert1
                     }
-                    Esc => {
+                    Esc | Alt('\u{1b}') => { //Quickfix for tmux
                         self.into_normal_mode();
                         Normal
                     },
@@ -311,7 +311,7 @@ impl Controller {
                     Char(a) if char_is_hex(a) => {
                         Replace2(char_to_hex(a).unwrap())
                     },
-                    Esc => {
+                    Esc | Alt('\u{1b}') => { //Quickfix for tmux
                         self.into_normal_mode();
                         Normal
                     },
@@ -326,7 +326,7 @@ impl Controller {
                         self.model.snapshot();
                         Normal
                     }
-                    Esc => {
+                    Esc | Alt('\u{1b}') => { //Quickfix for tmux
                         self.into_normal_mode();
                         Normal
                     },
@@ -342,7 +342,7 @@ impl Controller {
                     Char(a) if char_is_hex(a) => {
                         ReplaceMany2(char_to_hex(a).unwrap())
                     },
-                    Esc => {
+                    Esc | Alt('\u{1b}') => { //Quickfix for tmux
                         self.into_normal_mode();
                         Normal
                     },
@@ -357,7 +357,7 @@ impl Controller {
                         self.make_move(Right);
                         ReplaceMany1
                     }
-                    Esc => {
+                    Esc | Alt('\u{1b}') => { //Quickfix for tmux
                         self.into_normal_mode();
                         Normal
                     },
@@ -399,7 +399,7 @@ impl Controller {
                         self.into_normal_mode();
                         Normal
                     },
-                    Esc => {
+                    Esc | Alt('\u{1b}') => { //Quickfix for tmux
                         self.into_normal_mode();
                         Normal
                     }
@@ -452,7 +452,7 @@ impl Controller {
                         self.view.status_view.set_body(&format!(":{}", &cmd));
                         Command(cmd)
                     }
-                    Esc => {
+                    Esc | Alt('\u{1b}') => { //Quickfix for tmux
                         self.view.status_view.set_body(&"");
                         Normal
                     },
