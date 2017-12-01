@@ -1,16 +1,16 @@
 [package]
 name = "xim"
-version = "0.1.0"
-authors = ["Damian Poddebniak <damian.poddebniak@fh-muenster.de>"]
+version = "0.2.0"
+authors = ["Damian Poddebniak <poddebniak@fh-muenster.de>"]
 
 [dependencies]
+chan         = "*"
+chan-signal  = "*"
+clippy       = {version = "*", optional = true}
 docopt       = "*"
 serde        = "*"
 serde_derive = "*"
 termion      = "*"
-chan         = "*"
-chan-signal  = "*"
-clippy       = {version = "*", optional = true}
 
 [dev-dependencies]
 quickcheck   = "*"

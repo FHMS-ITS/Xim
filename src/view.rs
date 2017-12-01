@@ -1,20 +1,16 @@
 use super::{Ascii, align, align_top, Caret};
 use super::model::Model;
 
-use std::cell::RefCell;
 use std::cmp::{min, max};
-use std::io::{Write, Result as IoResult, Stdout};
+use std::io::{Write, Result as IoResult};
 use std::mem::swap;
-use std::rc::Rc;
 
 use termion::clear::{All as ClearAll, CurrentLine as ClearCurrentLine};
 use termion::color::{Fg, Red, Reset as ColorReset};
 use termion::cursor::Goto;
-use termion::raw::RawTerminal;
-use termion::screen::AlternateScreen;
 use termion::style::{Bold, Invert, NoInvert, Underline, Reset as StyleReset};
 
-pub type RawStdout = Rc<RefCell<AlternateScreen<RawTerminal<Stdout>>>>;
+use super::RawStdout;
 
 fn chunks_indices(mut start: u16, end: u16, size: u16) -> Vec<(u16, u16)> {
     let mut result = Vec::with_capacity(((end - start) / 16) as usize);
@@ -137,8 +133,10 @@ impl HexView {
     pub fn draw(&self, model: &Model) -> IoResult<()> {
         let mut stdout = self.stdout.borrow_mut();
 
+        let offset_width = format!("{:x}", model.buffer.len()).len();
+
         let DrawArea { origin: (x, y), dimens: (w, h) } = self.area;
-        let offset_area = DrawArea { origin: (x, y+1), dimens: (8, h), };
+        let offset_area = DrawArea { origin: (x, y+1), dimens: (offset_width as u16, h), };
         let hex_area = DrawArea {origin: (offset_area.origin.0 + offset_area.dimens.0 + 2, y+1), dimens: (16*2 + 15, h), };
         let ascii_area = DrawArea { origin: (hex_area.origin.0 + hex_area.dimens.0 + 2, y+1), dimens: (16, h) };
 
@@ -151,7 +149,7 @@ impl HexView {
 
         // Draw indices
         write!(stdout, "{}", Fg(Red))?;
-        write!(stdout, "{}{}", Goto(12, 1), "0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f")?;
+        write!(stdout, "{}{}", Goto(offset_width as u16 + 4, 1), "0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f")?;
         write!(stdout, "{}", Fg(ColorReset))?;
 
         for (line, chunk) in model.buffer[self.scroll_pos..].chunks(16).take(h as usize).enumerate() {
@@ -159,7 +157,7 @@ impl HexView {
             let line = line as u16;
 
             // Draw offsets
-            write!(stdout, "{}{}{:08x}: {}", Goto(offset_area.origin.0, offset_area.origin.1 + line), Fg(Red), offset + self.scroll_pos, Fg(ColorReset)).unwrap();
+            write!(stdout, "{}{}{:0width$x}: {}", Goto(offset_area.origin.0, offset_area.origin.1 + line), Fg(Red), offset + self.scroll_pos, Fg(ColorReset), width=offset_width).unwrap();
 
             // Draw hex values
             write!(stdout, "{}", Goto(hex_area.origin.0, hex_area.origin.1 + line)).unwrap();

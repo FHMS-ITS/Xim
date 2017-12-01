@@ -1,38 +1,146 @@
+extern crate chan;
+extern crate chan_signal;
 extern crate termion;
 
-pub mod controller;
-pub mod model;
-pub mod view;
+use chan_signal::{Signal, notify};
+use termion::event::Key;
+use termion::input::TermRead;
+use termion::raw::{RawTerminal, IntoRawMode};
+use termion::screen::AlternateScreen;
+use std::cell::RefCell;
+use std::error::Error;
+use std::io::{Write, Stdout, stdout, stdin};
+use std::sync::mpsc::sync_channel;
+use std::thread;
+use std::rc::Rc;
+use std::cmp::min;
+use std::ops::{Add, AddAssign, Drop, Sub, SubAssign, Rem, RemAssign};
 
+mod controller;
+mod model;
+mod view;
 mod history;
 mod vim;
 
-use std::cmp::min;
-use std::ops::{Add, AddAssign, Drop, Sub, SubAssign, Rem, RemAssign};
+use controller::Controller;
+use view::View;
+use model::Model;
+
+pub type RawStdout = Rc<RefCell<AlternateScreen<RawTerminal<Stdout>>>>;
+
+enum Event {
+    Key(Key),
+    Resize((u16, u16)),
+    Kill,
+}
 
 pub struct Config {
     pub file: String,
 }
 
-pub struct App;
+pub struct App {
+    config: Config,
+    stdout: RawStdout,
+}
 
 impl App {
-    pub fn new() -> App {
-        App
+    pub fn new(config: Config) -> App {
+        App {
+            config: config,
+            stdout: Rc::new(
+                RefCell::new(
+                    AlternateScreen::from(stdout().into_raw_mode().unwrap())
+                )
+            ),
+        }
     }
 
-    pub fn with(config: Config) -> App {
-        App
+    pub fn run(mut self) -> Result<(), Box<Error>> {
+        self.setup_terminal()?;
+
+        let events = {
+            // Create event channel
+            let (send, recv) = sync_channel(0);
+
+            // Register window changed event
+            let signals = notify(&[Signal::WINCH, Signal::TERM]);
+
+            // Receive window changed events
+            let send_1 = send.clone();
+            thread::spawn(move || {
+                for signal in signals.iter() {
+                    eprintln!("{:?}", signal);
+                    match signal {
+                        Signal::WINCH => send_1.send(Event::Resize(termion::terminal_size().unwrap())).unwrap(),
+                        Signal::TERM => send_1.send(Event::Kill).unwrap(),
+                        _ => (),
+                    }
+                }
+            });
+
+            // Receive keypress events
+            let send_2 = send.clone();
+            thread::spawn(move || {
+                for c in stdin().keys() {
+                    send_2.send(Event::Key(c.unwrap())).unwrap();
+                }
+            });
+
+            recv
+        };
+
+        let mut ctrl = Controller::new(
+            Model::new(),
+            View::new(self.stdout.clone())
+        );
+
+        ctrl.resize_view(termion::terminal_size()?);
+        ctrl.open(&self.config.file);
+        ctrl.update_view();
+
+        for event in events.iter() {
+            match event {
+                Event::Key(k) => {
+                    if !ctrl.transition(k) {
+                        break
+                    }
+                }
+                Event::Resize(new_size) => {
+                    ctrl.resize_view(new_size);
+                },
+                Event::Kill => {
+                    break
+                }
+            }
+
+            ctrl.update_view();
+        }
+
+        Ok(())
     }
 
-    pub fn run() {
-        unimplemented!();
+    fn setup_terminal(&mut self) -> Result<(), Box<Error>> {
+        let mut stdout = self.stdout.borrow_mut();
+        write!(stdout, "{}", termion::cursor::Hide)?;
+        write!(stdout, "{}", termion::clear::All)?;
+        stdout.flush()?;
+        Ok(())
+    }
+
+    fn teardown_terminal(&mut self) -> Result<(), Box<Error>> {
+        let mut stdout = self.stdout.borrow_mut();
+        write!(stdout, "{}", termion::clear::All)?;
+        write!(stdout, "{}", termion::cursor::Show)?;
+        stdout.flush()?;
+        Ok(())
     }
 }
 
 impl Drop for App {
     fn drop(&mut self) {
-        println!("Exiting App");
+        if let Err(error) = self.teardown_terminal() {
+            eprintln!("{}", error);
+        }
     }
 }
 

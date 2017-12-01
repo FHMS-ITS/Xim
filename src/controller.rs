@@ -1,7 +1,7 @@
 use super::view::*;
 use super::model::*;
-use super::{Caret, Hex};
-use super::vim::{VimState, VimCommand};
+use super::Caret;
+use super::vim::{VimState, VimCommand, ValueStateMachine, InsertMode, InsertState};
 
 use std::mem::swap;
 use termion;
@@ -11,6 +11,7 @@ pub struct Controller {
     pub state: VimState,
     pub model: Model,
     pub view: View,
+    mode: InsertMode,
 }
 
 impl Controller {
@@ -19,6 +20,7 @@ impl Controller {
             state: VimState::Normal,
             model: model,
             view: view,
+            mode: InsertMode::Hex,
         }
     }
 
@@ -40,7 +42,7 @@ impl Controller {
             Ok(_) => {
                 self.view.status_view.set_body(&format!("\"{}\" saved", self.model.path));
                 true
-            },
+            }
             Err(error) => {
                 self.view.status_view.set_body(&format!("could not save \"{}\": {}", self.model.path, error));
                 false
@@ -52,17 +54,17 @@ impl Controller {
 
     pub fn into_normal_mode(&mut self) {
         self.model.into_offset_mode();
-        self.view.status_view.set_body(&format!("{}-- Normal --{}", termion::style::Bold, termion::style::Reset));
+        self.view.status_view.set_body(&format!("{}-- Normal ({:?}) --{}", termion::style::Bold, self.mode, termion::style::Reset)); // TODO
     }
 
     pub fn into_insert_mode(&mut self) {
         self.model.into_insert_mode();
-        self.view.status_view.set_body(&format!("{}-- Insert --{}", termion::style::Bold, termion::style::Reset));
+        self.view.status_view.set_body(&format!("{}-- Insert ({:?}) --{}", termion::style::Bold, self.mode, termion::style::Reset)); // TODO
     }
 
     pub fn into_replace_mode(&mut self) {
         self.model.into_replace_mode();
-        self.view.status_view.set_body(&format!("{}-- Replace --{}", termion::style::Bold, termion::style::Reset));
+        self.view.status_view.set_body(&format!("{}-- Replace ({:?}) --{}", termion::style::Bold, self.mode, termion::style::Reset)); // TODO
     }
 
     pub fn into_command_mode(&mut self) {
@@ -108,15 +110,6 @@ impl Controller {
     pub fn set_index_aligned(&mut self) {
         let index = self.model.get_index();
         self.model.set_index(index - (index % 16));
-    }
-
-    pub fn get_index(&self) -> usize {
-        match self.model.caret {
-            Caret::Index(index) |
-            Caret::Replace(index) |
-            Caret::Offset(index) |
-            Caret::Visual(_, index) => index.into(),
-        }
     }
 
     // Editing
@@ -185,295 +178,279 @@ impl Controller {
 
         let mut run = true;
 
-        // TODO: Pull state machine
-        /*
         self.state = match self.state.clone() {
-            Normal => {
-                match next_key() {
-                    Char('y') => {
-                        match next_key() {
-                            Char('y') => {},
-                            _ => {},
-                        }
-                    },
-                    _ => {},
+            Normal => match key {
+                Left | Right | Up | Down | Char('h') | Char('l') | Char('k') | Char('j') => {
+                    self.make_move(key);
+                    Normal
                 }
+                Backspace => {
+                    self.make_move(Left);
+                    Normal
+                }
+                Char('\t') => {
+                    self.mode = match self.mode {
+                        InsertMode::Hex => {
+                            self.view.status_view.set_body(&format!("{}-- Normal (Ascii) --{}", termion::style::Bold, termion::style::Reset)); // TODO
+                            InsertMode::Ascii
+                        }
+                        InsertMode::Ascii => {
+                            self.view.status_view.set_body(&format!("{}-- Normal (Hex) --{}", termion::style::Bold, termion::style::Reset)); // TODO
+                            InsertMode::Hex
+                        }
+                        InsertMode::Binary => unimplemented!(),
+                    };
+                    Normal
+                }
+                Char('a') => {
+                    self.into_insert_mode();
+                    self.make_move(Right);
+                    VimState::Insert(ValueStateMachine::new(self.mode))
+                }
+                Char('i') => {
+                    self.into_insert_mode();
+                    VimState::Insert(ValueStateMachine::new(self.mode))
+                }
+                Delete | Char('x') => {
+                    self.remove_right();
+                    self.model.snapshot();
+                    Normal
+                }
+                Char('r') => {
+                    self.into_replace_mode();
+                    VimState::Replace(ValueStateMachine::new(self.mode), false)
+                }
+                Char('R') => {
+                    self.into_replace_mode();
+                    VimState::Replace(ValueStateMachine::new(self.mode), true)
+                }
+                Char('v') => {
+                    self.into_visual_mode();
+                    Visual
+                }
+                Char(':') => {
+                    self.into_command_mode();
+                    Command(String::new())
+                }
+                Char('\n') => {
+                    self.make_move(Down);
+                    self.set_index_aligned();
+                    Normal
+                }
+                Char('u') => {
+                    if !self.model.undo() {
+                        self.view.status_view.set_body("Nothing to undo");
+                    }
+                    Normal
+                }
+                Ctrl('r') => {
+                    if !self.model.redo() {
+                        self.view.status_view.set_body("Nothing to redo");
+                    }
+                    Normal
+                }
+                Esc | Alt('\u{1b}') => { //Quickfix for tmux
+                    self.into_normal_mode();
+                    Normal
+                }
+                _ => Normal,
             },
-            _ => {},
-        };
-        */
-
-        self.state = match self.state.clone() {
-            Normal => {
-                match key {
-                    Left | Right | Up | Down | Char('h') | Char('l') | Char('k') | Char('j') => {
-                        self.make_move(key);
-                        Normal
-                    }
-                    Backspace => {
-                        self.make_move(Left);
-                        Normal
-                    }
-                    Char('\t') => {
-                        self.view.status_view.set_body("Changing to ASCII not implemented yet");
-                        Normal
-                    }
-                    Char('a') => {
-                        self.into_insert_mode();
-                        self.make_move(Right);
-                        Insert1
-                    }
-                    Char('i') => {
-                        self.into_insert_mode();
-                        Insert1
-                    },
-                    Delete | Char('x') => {
-                        self.remove_right();
-                        self.model.snapshot();
-                        Normal
-                    }
-                    Char('r') => {
-                        self.into_replace_mode();
-                        Replace1
-                    },
-                    Char('R') => {
-                        self.into_replace_mode();
-                        ReplaceMany1
-                    },
-                    Char('v') => {
-                        self.into_visual_mode();
-                        Visual
-                    }
-                    Char(':') => {
-                        self.into_command_mode();
-                        Command(String::new())
-                    },
-                    Char('\n') => {
-                        self.make_move(Down);
-                        self.set_index_aligned();
-                        Normal
-                    }
-                    Char('u') => {
-                        if !self.model.undo() {
-                            self.view.status_view.set_body("Nothing to undo");
-                        }
-                        Normal
-                    }
-                    Ctrl('r') => {
-                        if !self.model.redo() {
-                            self.view.status_view.set_body("Nothing to redo");
-                        }
-                        Normal
-                    }
-                    Esc | Alt('\u{1b}') => { //Quickfix for tmux
-                        self.into_normal_mode();
-                        Normal
-                    }
-                    _ => Normal,
+            VimState::Insert(mut machine) => match key {
+                Left | Right | Up | Down => {
+                    self.make_move(key);
+                    VimState::Insert(machine)
                 }
-            }
-            Insert1 => {
-                match key {
-                    Left | Right | Up | Down => {
-                        self.make_move(key);
-                        Insert1
-                    }
-                    Backspace => {
-                        self.remove_left();
-                        self.model.snapshot();
-                        Insert1
-                    }
-                    Delete => {
-                        self.remove_right();
-                        self.model.snapshot();
-                        Insert1
-                    }
-                    Char(a) if a.is_hex() => {
-                        Insert2(a.to_hex().unwrap())
-                    },
-                    Insert => {
-                        self.into_replace_mode();
-                        ReplaceMany1
-                    }
-                    Esc | Alt('\u{1b}') => { //Quickfix for tmux
-                        self.into_normal_mode();
-                        Normal
-                    },
-                    _ => Insert1
+                Backspace => {
+                    self.remove_left();
+                    self.model.snapshot();
+                    VimState::Insert(machine)
                 }
-            }
-            Insert2(a) => {
-                match key {
-                    Char(b) if b.is_hex() => {
-                        self.insert(16*a + b.to_hex().unwrap());
-                        self.model.snapshot();
-                        Insert1
-                    }
-                    Esc | Alt('\u{1b}') => { //Quickfix for tmux
-                        self.into_normal_mode();
-                        Normal
-                    },
-                    _ => Insert2(a)
+                Delete => {
+                    self.remove_right();
+                    self.model.snapshot();
+                    VimState::Insert(machine)
                 }
-            }
-            Replace1 => {
-                match key {
-                    Char(a) if a.is_hex() => {
-                        Replace2(a.to_hex().unwrap())
-                    },
-                    Esc | Alt('\u{1b}') => { //Quickfix for tmux
-                        self.into_normal_mode();
-                        Normal
-                    },
-                    _ => Replace1
-                }
-            }
-            Replace2(a) => {
-                match key {
-                    Char(b) if b.is_hex() => {
-                        self.into_normal_mode();
-                        self.replace(16*a + b.to_hex().unwrap());
-                        self.model.snapshot();
-                        Normal
-                    }
-                    Esc | Alt('\u{1b}') => { //Quickfix for tmux
-                        self.into_normal_mode();
-                        Normal
-                    },
-                    _ => Replace2(a)
-                }
-            }
-            ReplaceMany1 => {
-                match key {
-                    Left | Right | Up | Down => {
-                        self.make_move(key);
-                        ReplaceMany1
-                    }
-                    Char(a) if a.is_hex() => {
-                        ReplaceMany2(a.to_hex().unwrap())
-                    },
-                    Esc | Alt('\u{1b}') => { //Quickfix for tmux
-                        self.into_normal_mode();
-                        Normal
-                    },
-                    _ => ReplaceMany1
-                }
-            }
-            ReplaceMany2(a) => {
-                match key {
-                    Char(b) if b.is_hex() => {
-                        self.replace(16*a + b.to_hex().unwrap());
-                        self.model.snapshot();
-                        self.make_move(Right);
-                        ReplaceMany1
-                    }
-                    Esc | Alt('\u{1b}') => { //Quickfix for tmux
-                        self.into_normal_mode();
-                        Normal
-                    },
-                    _ => ReplaceMany2(a)
-                }
-            }
-            Visual => {
-                match key {
-                    Left | Right | Up | Down | Char('h') | Char('l') | Char('k') | Char('j') => {
-                        self.make_move(key);
-                        Visual
-                    },
-                    Char('y') => {
-                        self.view.status_view.set_body("yank not implemented yet");
-                        self.into_normal_mode();
-                        Normal
-                    },
-                    Char('o') => {
-                        if let Caret::Visual(ref mut start, ref mut end) = self.model.caret {
-                            swap(start, end);
-                        } else {
-                            panic!("wrong caret in visual state");
-                        }
-                        Visual
-                    },
-                    Char('x') | Char('d') => {
-                        if let Caret::Visual(start, end) = self.model.caret {
-                            let (start, end) = if usize::from(start) > usize::from(end) {
-                                (end, start)
-                            } else {
-                                (start, end)
-                            };
-
-                            if let Err(e) = self.model.edit(start.into(), usize::from(end) + 1, &[]) {
-                                self.view.status_view.set_body(&format!("could not remove range ({})", e));
-                            } else {
-                                self.model.set_index(start.into());
-                            }
-
+                Char(a) if machine.valid_char(a) => { // TODO: Bug
+                    machine.transition(key);
+                    match machine.state.clone() {
+                        InsertState::Done(byte) => {
+                            self.insert(byte);
                             self.model.snapshot();
+                            VimState::Insert(ValueStateMachine::new(self.mode))
+                        }
+                        InsertState::Incomplete(_) => {
+                            VimState::Insert(machine)
+                        }
+                        InsertState::Error => {
+                            VimState::Insert(machine)
+                        }
+                    }
+                }
+                Char('\t') => {
+                    self.mode = match self.mode {
+                        InsertMode::Hex => {
+                            self.view.status_view.set_body(&format!("{}-- Insert (Ascii) --{}", termion::style::Bold, termion::style::Reset)); // TODO
+                            InsertMode::Ascii
+                        }
+                        InsertMode::Ascii => {
+                            self.view.status_view.set_body(&format!("{}-- Insert (Hex) --{}", termion::style::Bold, termion::style::Reset)); // TODO
+                            InsertMode::Hex
+                        }
+                        InsertMode::Binary => unimplemented!(),
+                    };
+                    VimState::Insert(ValueStateMachine::new(self.mode))
+                }
+                Insert => {
+                    self.into_replace_mode();
+                    VimState::Replace(ValueStateMachine::new(self.mode), true)
+                }
+                Esc | Alt('\u{1b}') => { //Quickfix for tmux
+                    self.into_normal_mode();
+                    Normal
+                }
+                _ => VimState::Insert(machine)
+            },
+            Replace(mut machine, many) => match key {
+                Left | Right | Up | Down | Char('h') | Char('l') | Char('k') | Char('j') if many => {
+                    self.make_move(key);
+                    Replace(machine, many)
+                }
+                Char(c) if machine.valid_char(c) => {
+                    machine.transition(key);
+                    match machine.state.clone() {
+                        InsertState::Done(byte) => {
+                            self.replace(byte);
+                            self.model.snapshot();
+                            if many {
+                                self.make_move(Right);
+                                VimState::Replace(ValueStateMachine::new(self.mode), many)
+                            } else {
+                                self.into_normal_mode();
+                                VimState::Normal
+                            }
+                        }
+                        InsertState::Incomplete(_) => {
+                            VimState::Replace(machine, many)
+                        }
+                        InsertState::Error => {
+                            VimState::Replace(machine, many)
+                        }
+                    }
+                }
+                Char('\t') => {
+                    self.mode = match self.mode {
+                        InsertMode::Hex => {
+                            self.view.status_view.set_body(&format!("{}-- Replace (Ascii) --{}", termion::style::Bold, termion::style::Reset)); // TODO
+                            InsertMode::Ascii
+                        }
+                        InsertMode::Ascii => {
+                            self.view.status_view.set_body(&format!("{}-- Replace (Hex) --{}", termion::style::Bold, termion::style::Reset)); // TODO
+                            InsertMode::Hex
+                        }
+                        InsertMode::Binary => unimplemented!(),
+                    };
+                    VimState::Replace(ValueStateMachine::new(self.mode), many)
+                }
+                Esc | Alt('\u{1b}') => { //Quickfix for tmux
+                    self.into_normal_mode();
+                    Normal
+                }
+                _ => VimState::Replace(ValueStateMachine::new(self.mode), many)
+            },
+            Visual => match key {
+                Left | Right | Up | Down | Char('h') | Char('l') | Char('k') | Char('j') => {
+                    self.make_move(key);
+                    Visual
+                }
+                Char('y') => {
+                    self.view.status_view.set_body("yank not implemented yet");
+                    self.into_normal_mode();
+                    Normal
+                }
+                Char('o') => {
+                    if let Caret::Visual(ref mut start, ref mut end) = self.model.caret {
+                        swap(start, end);
+                    } else {
+                        panic!("wrong caret in visual state");
+                    }
+                    Visual
+                }
+                Char('x') | Char('d') => {
+                    if let Caret::Visual(start, end) = self.model.caret {
+                        let (start, end) = if usize::from(start) > usize::from(end) {
+                            (end, start)
                         } else {
-                            unreachable!();
+                            (start, end)
+                        };
+
+                        if let Err(e) = self.model.edit(start.into(), usize::from(end) + 1, &[]) {
+                            self.view.status_view.set_body(&format!("could not remove range ({})", e));
+                        } else {
+                            self.model.set_index(start.into());
                         }
-                        self.into_normal_mode();
-                        Normal
-                    },
-                    Esc | Alt('\u{1b}') => { //Quickfix for tmux
-                        self.into_normal_mode();
-                        Normal
+
+                        self.model.snapshot();
+                    } else {
+                        unreachable!();
                     }
-                    _ => Visual
+                    self.into_normal_mode();
+                    Normal
                 }
-            }
-            Command(mut cmd) => {
-                match key {
-                    Char('\n') => {
-                        match VimCommand::parse(&cmd) {
-                            Ok(cmd) => {
-                                match cmd {
-                                    VimCommand::Quit => {
-                                        if self.model.is_modified() {
-                                            self.view.status_view.set_body("save your changes with :w or force quit with :q!");
-                                        } else {
-                                            run = false;
-                                        }
-                                    },
-                                    VimCommand::QuitWithoutSaving => {
-                                        run = false;
-                                    }
-                                    VimCommand::Save => {
-                                        self.save();
-                                    },
-                                    VimCommand::SaveAndQuit => {
-                                        if self.save() {
-                                            run = false;
-                                        }
-                                    },
-                                    VimCommand::Jump(offset) => {
-                                        self.set_index(offset);
-                                        self.view.status_view.set_body(&"");
-                                    },
+                Esc | Alt('\u{1b}') => { //Quickfix for tmux
+                    self.into_normal_mode();
+                    Normal
+                }
+                _ => Visual
+            },
+            Command(mut cmd) => match key {
+                Char('\n') => {
+                    match VimCommand::parse(&cmd) {
+                        Ok(cmd) => match cmd {
+                            VimCommand::Quit => {
+                                if self.model.is_modified() {
+                                    self.view.status_view.set_body("save your changes with :w or force quit with :q!");
+                                } else {
+                                    run = false;
                                 }
-                            },
-                            Err(msg) => {
-                                self.view.status_view.set_body(msg);
-                            },
+                            }
+                            VimCommand::QuitWithoutSaving => {
+                                run = false;
+                            }
+                            VimCommand::Save => {
+                                self.save();
+                            }
+                            VimCommand::SaveAndQuit => {
+                                if self.save() {
+                                    run = false;
+                                }
+                            }
+                            VimCommand::Jump(offset) => {
+                                self.set_index(offset);
+                                self.view.status_view.set_body(&"");
+                            }
                         }
-                        Normal
+                        Err(msg) => {
+                            self.view.status_view.set_body(msg);
+                        }
                     }
-                    Backspace => {
-                        cmd.pop();
-                        self.view.status_view.set_body(&format!(":{}", &cmd));
-                        Command(cmd)
-                    }
-                    Char(c) => {
-                        cmd.push(c);
-                        self.view.status_view.set_body(&format!(":{}", &cmd));
-                        Command(cmd)
-                    }
-                    Esc | Alt('\u{1b}') => { //Quickfix for tmux
-                        self.view.status_view.set_body(&"");
-                        Normal
-                    },
-                    _ => Command(cmd)
+                    Normal
                 }
-            }
+                Backspace => {
+                    cmd.pop();
+                    self.view.status_view.set_body(&format!(":{}", &cmd));
+                    Command(cmd)
+                }
+                Char(c) => {
+                    cmd.push(c);
+                    self.view.status_view.set_body(&format!(":{}", &cmd));
+                    Command(cmd)
+                }
+                Esc | Alt('\u{1b}') => { //Quickfix for tmux
+                    self.view.status_view.set_body(&"");
+                    Normal
+                }
+                _ => Command(cmd)
+            },
         };
 
         run
