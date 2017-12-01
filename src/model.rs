@@ -75,7 +75,7 @@ impl Model {
 
     pub fn into_offset_mode(&mut self) {
         self.caret = match self.caret {
-            Index(index) => Offset(UsizeMax::new(index.value, index.get_maximum().saturating_sub(1))),
+            Index(index) => Offset(UsizeMax::new(index.value.saturating_sub(1), index.get_maximum().saturating_sub(1))),
             Offset(index) |
             Replace(index) |
             Visual(_, index) => Offset(index),
