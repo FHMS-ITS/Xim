@@ -218,6 +218,11 @@ impl Controller {
                         self.view.status_view.set_body("Changing to ASCII not implemented yet");
                         Normal
                     }
+                    Char('a') => {
+                        self.into_insert_mode();
+                        self.make_move(Right);
+                        Insert1
+                    }
                     Char('i') => {
                         self.into_insert_mode();
                         Insert1
