@@ -43,7 +43,7 @@ impl<T: Clone> History<T> {
     }
 
     pub fn checkout(&self) -> Option<T> {
-        self.done.last().map(|obj| obj.clone())
+        self.done.last().cloned()
     }
 }
 

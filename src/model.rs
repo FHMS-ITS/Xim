@@ -64,47 +64,6 @@ impl Model {
         self.buffer != disc_content
     }
 
-    pub fn into_insert_mode(&mut self) {
-        self.caret = match self.caret {
-            Index(index) => Index(index),
-            Offset(index) |
-            Replace(index) |
-            Visual(_, index) => Index(UsizeMax::new(index.value, index.get_maximum().saturating_add(1))),
-        }
-    }
-
-    pub fn into_offset_mode(&mut self) {
-        self.caret = match self.caret {
-            Index(index) => Offset(UsizeMax::new(index.value.saturating_sub(1), index.get_maximum().saturating_sub(1))),
-            Offset(index) |
-            Replace(index) |
-            Visual(_, index) => Offset(index),
-        }
-    }
-
-    pub fn into_replace_mode(&mut self) {
-        self.caret = match self.caret {
-            Index(index) => Replace(UsizeMax::new(index.value, index.get_maximum().saturating_sub(1))),
-            Offset(index) |
-            Replace(index) |
-            Visual(_, index) => Replace(index),
-        }
-    }
-
-    pub fn into_visual_mode(&mut self) {
-        self.caret = match self.caret {
-            Index(index) => {
-                Visual(
-                    UsizeMax::new(index.value, index.get_maximum().saturating_sub(1)),
-                    UsizeMax::new(index.value, index.get_maximum().saturating_sub(1))
-                )
-            }
-            Offset(index) |
-            Replace(index) => Visual(index, index),
-            Visual(start, begin) => Visual(start, begin),
-        }
-    }
-
     pub fn set_index(&mut self, new_index: usize) {
         match self.caret {
             Index(ref mut index) |
@@ -179,7 +138,7 @@ impl Model {
 
         match self.caret {
             Index(ref mut index) => index.set_maximum(self.buffer.len()),
-            Offset(ref mut index) => index.set_maximum(self.buffer.len().saturating_sub(1)),
+            Offset(ref mut index) |
             Replace(ref mut index) => index.set_maximum(self.buffer.len().saturating_sub(1)),
             Visual(ref mut start, ref mut end) => {
                 start.set_maximum(self.buffer.len().saturating_sub(1));
@@ -195,14 +154,13 @@ impl Model {
 mod tests {
     use super::*;
 
-    /*
     quickcheck!{
         fn test_edit(buffer: Vec<u8>, start: usize, end: usize, new: Vec<u8>) -> bool {
             let mut buffer = buffer.clone();
 
             let mut model = Model {
                 path: "".into(),
-                caret: Caret::Offset(0),
+                caret: Caret::Offset(UsizeMax::new(0, buffer.len())),
                 buffer: buffer.clone(),
                 history: History::new(),
             };
@@ -214,8 +172,6 @@ mod tests {
             } else {
                 true
             }
-
         }
     }
-    */
 }

@@ -1,4 +1,4 @@
-use termion::event::Key::{self, Char, Esc, Backspace};
+use termion::event::Key::{self, Char, Backspace};
 
 fn is_binary(c: char) -> bool {
     match c {
@@ -22,96 +22,99 @@ fn is_printable(c: char) -> bool {
 }
 
 #[derive(Copy, Clone, Debug)]
-pub enum InsertMode {
+pub enum InputMode {
     Binary,
     Hex,
     Ascii,
 }
 
 #[derive(Clone, Debug)]
-pub enum InsertState {
+pub enum InputState {
     Done(u8),
-    Error,
     Incomplete(String),
 }
 
 #[derive(Clone, Debug)]
-pub struct ValueStateMachine {
-    mode: InsertMode,
-    pub state: InsertState,
+pub struct InputStateMachine {
+    mode: InputMode,
+    pub state: InputState,
 }
 
-use self::InsertMode::*;
-use self::InsertState::*;
-
-impl ValueStateMachine {
-    pub fn new(mode: InsertMode) -> ValueStateMachine {
-        ValueStateMachine {
+impl InputStateMachine {
+    pub fn new(mode: InputMode) -> InputStateMachine {
+        InputStateMachine {
             mode: mode,
-            state: Incomplete(String::new()),
+            state: InputState::Incomplete(String::new()),
         }
     }
 
-    pub fn valid_char(&self, c: char) -> bool {
+    pub fn valid_input(&self, c: char) -> bool {
         match self.mode {
-            Binary => is_binary(c),
-            Hex => is_hex(c),
-            Ascii => is_printable(c),
+            InputMode::Binary => is_binary(c),
+            InputMode::Hex => is_hex(c),
+            InputMode::Ascii => is_printable(c),
+        }
+    }
+
+    pub fn initial(&self) -> bool {
+        match self.state.clone() {
+            InputState::Incomplete(vec) => vec.is_empty(),
+            InputState::Done(_) => true,
         }
     }
 
     pub fn transition(&mut self, key: Key) {
         self.state = match self.state.clone() {
-            Incomplete(mut vec) => {
+            InputState::Incomplete(mut vec) => {
                 match key {
                     Backspace => {
                         vec.pop();
-                        Incomplete(vec)
+                        InputState::Incomplete(vec)
                     }
-                    Char(x) => {
+                    Char(x) if self.valid_input(x) => {
                         vec.push(x);
                         match self.mode {
-                            InsertMode::Binary => {
+                            InputMode::Binary => {
                                 if vec.len() == 8 {
-                                    if let Ok(byte) = u8::from_str_radix(&vec, 2) {
-                                        Done(byte)
-                                    } else {
-                                        Error
-                                    }
+                                    // Safe-from-panic: This will never panic, because invalid characters can't be inserted
+                                    InputState::Done(u8::from_str_radix(&vec, 2).unwrap())
                                 } else {
-                                    Incomplete(vec)
+                                    InputState::Incomplete(vec)
                                 }
                             }
-                            InsertMode::Hex => {
+                            InputMode::Hex => {
                                 if vec.len() == 2 {
-                                    if let Ok(byte) = u8::from_str_radix(&vec, 16) {
-                                        Done(byte)
-                                    } else {
-                                        Error
-                                    }
+                                    // Safe-from-panic: This will never panic, because invalid characters can't be inserted
+                                    InputState::Done(u8::from_str_radix(&vec, 16).unwrap())
                                 } else {
-                                    Incomplete(vec)
+                                    InputState::Incomplete(vec)
                                 }
                             }
-                            InsertMode::Ascii => {
+                            InputMode::Ascii => {
                                 if vec.len() == 1 {
-                                    if let Some(c) = vec.chars().next() {
-                                        Done(c as u8)
-                                    } else {
-                                        Error
-                                    }
+                                    // Safe-from-panic: We push prior to the next() call, thus there is always at least one character
+                                    InputState::Done(vec.chars().next().unwrap() as u8)
                                 } else {
-                                    Incomplete(vec)
+                                    InputState::Incomplete(vec)
                                 }
                             }
                         }
                     }
-                    _ => Error
+                    _ => InputState::Incomplete(vec),
                 }
             }
-            _ => Error,
+            InputState::Done(byte) => InputState::Done(byte),
         }
     }
+}
+
+#[derive(Clone)]
+pub enum VimState {
+    Normal,
+    Insert(InputStateMachine),
+    Replace(InputStateMachine, bool),
+    Visual,
+    Command(String),
 }
 
 // TODO: Merge with planned refactoring with Command-Pattern?
@@ -154,13 +157,4 @@ impl VimCommand {
             },
         }
     }
-}
-
-#[derive(Clone)]
-pub enum VimState {
-    Normal,
-    Insert(ValueStateMachine),
-    Replace(ValueStateMachine, bool),
-    Visual,
-    Command(String),
 }

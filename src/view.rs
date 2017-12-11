@@ -140,7 +140,7 @@ impl HexView {
         let hex_area = DrawArea {origin: (offset_area.origin.0 + offset_area.dimens.0 + 2, y+1), dimens: (16*2 + 15, h), };
         let ascii_area = DrawArea { origin: (hex_area.origin.0 + hex_area.dimens.0 + 2, y+1), dimens: (16, h) };
 
-        if model.buffer.len() == 0 {
+        if model.buffer.is_empty() {
             let msg = "empty file: go into insert mode and insert some bytes";
             write!(stdout, "{}{}", Goto(w / 2 - (msg.len() as u16 / 2), h / 2), msg).unwrap();
 
@@ -290,5 +290,28 @@ impl StatusView {
         stdout.flush()?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_chunks_indices() {
+        assert_eq!(chunks_indices(0, 16, 5), vec![(0, 4), (5, 9), (10, 14), (15, 16)]);
+        assert_eq!(chunks_indices(0, 6, 2), vec![(0, 1), (2, 3), (4, 5), (6, 6)]);
+        assert_eq!(chunks_indices(0, 3, 1), vec![(0, 0), (1, 1), (2, 2), (3, 3)]);
+        assert_eq!(chunks_indices(0, 10, 3), vec![(0, 2), (3, 5), (6, 8), (9, 10)]);
+        assert_eq!(chunks_indices(0, 11, 3), vec![(0, 2), (3, 5), (6, 8), (9, 11)]);
+        assert_eq!(chunks_indices(10, 11, 3), vec![(10, 11)]);
+        assert_eq!(chunks_indices(10, 15, 7), vec![(10, 15)]);
+        assert_eq!(chunks_indices(13, 19, 6), vec![(13, 18), (19, 19)]);
+    }
+
+    #[test]
+    fn test_range_to_marker() {
+        assert_eq!(range_to_marker(0, 16), vec![(0, 0, 15), (1, 0, 0)]);
+        assert_eq!(range_to_marker(8, 18), vec![(0, 8, 15), (1, 0, 2)]);
     }
 }

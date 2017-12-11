@@ -7,7 +7,7 @@ use docopt::Docopt;
 use std::error::Error;
 use xim::{App, Config};
 
-const USAGE: &'static str = "
+const USAGE: &str = "
 Xim
 
 Usage:
@@ -21,7 +21,7 @@ Options:
 ";
 
 // Get version from Cargo.toml
-const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Deserialize)]
 struct Args {
@@ -52,5 +52,4 @@ fn main() {
         eprintln!("error: {}", e);
         std::process::exit(1);
     });
-    println!("\n"); // line-break after exiting
 }

@@ -16,6 +16,10 @@ use std::rc::Rc;
 use std::cmp::min;
 use std::ops::{Add, AddAssign, Drop, Sub, SubAssign, Rem, RemAssign};
 
+#[cfg(test)]
+#[macro_use]
+extern crate quickcheck;
+
 mod controller;
 mod model;
 mod view;
@@ -62,18 +66,16 @@ impl App {
             // Create event channel
             let (send, recv) = sync_channel(0);
 
-            // Register window changed event
+            // Listen for window changed and terminate signals
             let signals = notify(&[Signal::WINCH, Signal::TERM]);
 
-            // Receive window changed events
             let send_1 = send.clone();
             thread::spawn(move || {
                 for signal in signals.iter() {
-                    eprintln!("{:?}", signal);
                     match signal {
                         Signal::WINCH => send_1.send(Event::Resize(termion::terminal_size().unwrap())).unwrap(),
                         Signal::TERM => send_1.send(Event::Kill).unwrap(),
-                        _ => (),
+                        _ => {},
                     }
                 }
             });
@@ -105,12 +107,8 @@ impl App {
                         break
                     }
                 }
-                Event::Resize(new_size) => {
-                    ctrl.resize_view(new_size);
-                },
-                Event::Kill => {
-                    break
-                }
+                Event::Resize(new_size) => ctrl.resize_view(new_size),
+                Event::Kill => break,
             }
 
             ctrl.update_view();
@@ -173,9 +171,9 @@ impl Hex for char {
 
     fn to_hex(self: char) -> Option<u8> {
         match self {
-            '0'...'9' => Some(self as u8 - '0' as u8),
-            'a'...'f' => Some(self as u8 - 'a' as u8 + 10),
-            'A'...'F' => Some(self as u8 - 'A' as u8 + 10),
+            '0'...'9' => Some(self as u8 - b'0'),
+            'a'...'f' => Some(self as u8 - b'a' + 10),
+            'A'...'F' => Some(self as u8 - b'A' + 10),
             _ => None
         }
     }
@@ -266,7 +264,7 @@ impl Rem<usize> for UsizeMax {
     type Output = UsizeMax;
 
     fn rem(mut self, other: usize) -> UsizeMax {
-        self.value = self.value % other;
+        self.value %= other;
         self.adjust();
         self
     }
@@ -325,10 +323,6 @@ pub enum Caret {
 }
 
 #[cfg(test)]
-#[macro_use]
-extern crate quickcheck;
-
-#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -350,24 +344,6 @@ mod tests {
                 _ => align_top(index * boundary + (random % boundary), boundary) == index * boundary + (boundary - 1),
             }
         }
-    }
-
-    #[test]
-    fn test_chunks_indices() {
-        assert_eq!(chunks_indices(0, 16, 5), vec![(0, 4), (5, 9), (10, 14), (15, 16)]);
-        assert_eq!(chunks_indices(0, 6, 2), vec![(0, 1), (2, 3), (4, 5), (6, 6)]);
-        assert_eq!(chunks_indices(0, 3, 1), vec![(0, 0), (1, 1), (2, 2), (3, 3)]);
-        assert_eq!(chunks_indices(0, 10, 3), vec![(0, 2), (3, 5), (6, 8), (9, 10)]);
-        assert_eq!(chunks_indices(0, 11, 3), vec![(0, 2), (3, 5), (6, 8), (9, 11)]);
-        assert_eq!(chunks_indices(10, 11, 3), vec![(10, 11)]);
-        assert_eq!(chunks_indices(10, 15, 7), vec![(10, 15)]);
-        assert_eq!(chunks_indices(13, 19, 6), vec![(13, 18), (19, 19)]);
-    }
-
-    #[test]
-    fn test_range_to_marker() {
-        assert_eq!(range_to_marker(0, 16), vec![(0, 0, 15), (1, 0, 0)]);
-        assert_eq!(range_to_marker(8, 18), vec![(0, 8, 15), (1, 0, 2)]);
     }
 
     quickcheck!{
