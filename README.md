@@ -1,4 +1,6 @@
-# Xim (unstable)
+# Xim (untested)
+
+Xim is useful for simple hex editing tasks. However, it is not thoroughly tested and may consume much memory. Use at your own risc.
 
 ![Screenshot](assets/xim.png)
 
@@ -64,11 +66,15 @@ $ ./target/release/xim <file>
 * [x] Delete
 * [x] Replace
 * [x] Visual mode
-* [ ] Copy/Paste
-* [ ] Edit in ASCII mode
+* [x] Copy/Paste
+* [ ] Edit in ASCII mode (partially implemented)
 * [x] Undo/Redo
 * [ ] Highlite differences
+
+# Efficiency
+
 * [ ] Portable colors
+* [ ] Optimize drawing (avoid flickering)
 * [ ] Persistent rope
-* [ ] Lazy Loading
+* [ ] Lazy loading/unloading of memory pages
 * [ ] Efficient saving

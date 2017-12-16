@@ -188,6 +188,7 @@ impl HexView {
             Caret::Offset(index) => {
                 let index = usize::from(index);
                 let byte = model.buffer[index];
+
                 write!(stdout, "{}{}{:02x}{}", Goto(hex_area.origin.0 + ((index % 16) as u16) * 3, hex_area.origin.1 + ((index - self.scroll_pos) / 16) as u16), Invert, byte, StyleReset).unwrap();
                 write!(stdout, "{}{}{}{}", Goto(ascii_area.origin.0 + ((index % 16) as u16), ascii_area.origin.1 + ((index - self.scroll_pos) / 16) as u16), Underline, byte.to_printable(), StyleReset).unwrap();
             },

@@ -15,6 +15,7 @@ pub struct Controller {
     pub model: Model,
     pub view: View,
     mode: InputMode,
+    yank: Option<Vec<u8>>,
 }
 
 impl Controller {
@@ -24,6 +25,7 @@ impl Controller {
             model: model,
             view: view,
             mode: InputMode::Hex,
+            yank: None,
         }
     }
 
@@ -154,6 +156,14 @@ impl Controller {
         self.model.inc_index(1);
     }
 
+    pub fn paste(&mut self, index: usize, value: &[u8]) {
+        if let Err(e) = self.model.edit(index, index, value) {
+            self.view.status_view.set_body(&format!("could not insert value ({})", e));
+        }
+        self.model.inc_index(value.len());
+        self.view.hex_view.scroll_to(self.model.get_index());
+    }
+
     pub fn remove_left(&mut self) {
         let index = self.model.get_index();
 
@@ -244,6 +254,7 @@ impl Controller {
                     VimState::Insert(InputStateMachine::new(self.mode))
                 }
                 Delete | Char('x') => {
+                    self.yank = Some(self.model.buffer[self.model.get_index()..self.model.get_index() + 1].to_owned());
                     self.remove_right();
                     self.model.snapshot();
                     Normal
@@ -269,16 +280,43 @@ impl Controller {
                     self.set_index_aligned();
                     Normal
                 }
+                Char('y') => {
+                    self.yank = Some(self.model.buffer[self.model.get_index()..self.model.get_index() + 1].to_owned());
+                    Normal
+                }
+                Char('p') => {
+                    if let Some(value) = self.yank.clone() {
+                        let index = self.model.get_index() + 1;
+                        self.paste(index, &value);
+                        self.model.snapshot();
+                    } else {
+                        //
+                    }
+                    Normal
+                }
+                Char('P') => {
+                    if let Some(value) = self.yank.clone() {
+                        let index = self.model.get_index();
+                        self.paste(index, &value);
+                        self.make_move(Left);
+                        self.model.snapshot();
+                    } else {
+                        //
+                    }
+                    Normal
+                }
                 Char('u') => {
                     if !self.model.undo() {
                         self.view.status_view.set_body("Nothing to undo");
                     }
+                    self.view.hex_view.scroll_to(self.model.get_index());
                     Normal
                 }
                 Ctrl('r') => {
                     if !self.model.redo() {
                         self.view.status_view.set_body("Nothing to redo");
                     }
+                    self.view.hex_view.scroll_to(self.model.get_index());
                     Normal
                 }
                 Esc | Alt('\u{1b}') => { // TODO: Quickfix for tmux
@@ -445,7 +483,17 @@ impl Controller {
                     Visual
                 }
                 Char('y') => {
-                    self.view.status_view.set_body("yank not implemented yet");
+                    if let Caret::Visual(start, end) = self.model.caret {
+                        let (start, end) = if usize::from(start) > usize::from(end) {
+                            (end, start)
+                        } else {
+                            (start, end)
+                        };
+
+                        self.yank = Some(self.model.buffer[start.into()..usize::from(end) + 1].to_owned());
+                    } else {
+                        unreachable!();
+                    }
                     self.change_to_normal_mode();
                     Normal
                 }
@@ -464,6 +512,8 @@ impl Controller {
                         } else {
                             (start, end)
                         };
+
+                        self.yank = Some(self.model.buffer[start.into()..usize::from(end) + 1].to_owned());
 
                         if let Err(e) = self.model.edit(start.into(), usize::from(end) + 1, &[]) {
                             self.view.status_view.set_body(&format!("could not remove range ({})", e));
