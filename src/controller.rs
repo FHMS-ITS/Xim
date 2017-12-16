@@ -480,6 +480,7 @@ impl Controller {
             Visual => match key {
                 Left | Right | Up | Down | Char('h') | Char('l') | Char('k') | Char('j') => {
                     self.make_move(key);
+                    self.view.hex_view.scroll_to(self.model.get_index());
                     Visual
                 }
                 Char('y') => {

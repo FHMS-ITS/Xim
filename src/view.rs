@@ -201,8 +201,8 @@ impl HexView {
             Caret::Visual(start, end) => {
                 let start = usize::from(start);
                 let end = usize::from(end);
-                let rel_start = (start - self.scroll_pos) as u16;
-                let rel_end = (end - self.scroll_pos) as u16;
+                let rel_start = (start.saturating_sub(self.scroll_pos)) as u16;
+                let rel_end = (end.saturating_sub(self.scroll_pos)) as u16;
 
                 let lines = range_to_marker(rel_start, rel_end);
 
