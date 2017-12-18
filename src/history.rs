@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub struct History<T> {
     done: Vec<T>,
     recall: Vec<T>,

@@ -6,10 +6,12 @@ use std::io::{Read, Write, Result as IoResult};
 use std::mem::swap;
 use history::History;
 
+#[derive(Debug)]
 pub struct Model {
     pub path: String,
     pub caret: Caret,
     pub buffer: Vec<u8>,
+    pub term_size: (u16, u16),
     history: History<(Vec<u8>, Caret)>,
 }
 
@@ -19,6 +21,7 @@ impl Model {
             path: "".into(),
             caret: Caret::Offset(UsizeMax::new(0, 0)),
             buffer: vec![],
+            term_size: (16, 16),
             history: History::new(),
         }
     }
@@ -148,6 +151,10 @@ impl Model {
 
         Ok(())
     }
+
+    pub fn set_term_size(&mut self, new_term_size: (u16, u16)) {
+        self.term_size = new_term_size;
+    }
 }
 
 #[cfg(test)]
@@ -163,6 +170,7 @@ mod tests {
                 caret: Caret::Offset(UsizeMax::new(0, buffer.len())),
                 buffer: buffer.clone(),
                 history: History::new(),
+                term_size: (0, 0),
             };
 
             if start <= buffer.len() && end <= buffer.len() && start <= end {

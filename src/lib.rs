@@ -21,7 +21,7 @@ use std::ops::{Add, AddAssign, Drop, Sub, SubAssign, Rem, RemAssign};
 extern crate quickcheck;
 
 mod controller;
-mod model;
+pub mod model;
 mod view;
 mod history;
 mod vim;
@@ -142,6 +142,22 @@ impl Drop for App {
     }
 }
 
+pub fn move_window(start: usize, height: usize, new_index: usize) -> Option<usize> {
+    if height == 0 {
+        return None;
+    }
+
+    let mut new_start = start;
+
+    if new_index < start {
+        new_start = new_index;
+    } else if new_index > start + (height.saturating_sub(1)) {
+        new_start = new_index - (height.saturating_sub(1));
+    }
+
+    Some(new_start)
+}
+
 pub trait Ascii {
     fn to_printable(self: Self) -> char;
 }
@@ -206,7 +222,7 @@ impl UsizeMax {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct UsizeMax {
     value: usize,
     max: usize,
@@ -314,7 +330,7 @@ pub fn align_top(value: u16, boundary: u16) -> u16 {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Caret {
     Index(UsizeMax),
     Offset(UsizeMax),
@@ -359,6 +375,22 @@ mod tests {
             }
 
             usize::from(value) <= max
+        }
+    }
+
+    quickcheck!{
+        fn test_move_window(start: usize, height: usize, index: usize) -> bool {
+            if let Some(new_start) = move_window(start, height, index) {
+                // Do not move when unnecessary...
+                if start <= index && index <= start + (height - 1) {
+                    new_start == start
+                } else {
+                    // ...and always be in range...
+                    new_start <= index && index <= new_start + height
+                }
+            } else {
+                height == 0
+            }
         }
     }
 }

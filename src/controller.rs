@@ -409,6 +409,10 @@ impl Controller {
                             self.make_move(key);
                             Replace(machine, many)
                         }
+                        Backspace => {
+                            self.make_move(Left);
+                            Replace(machine, many)
+                        }
                         Char(c) if machine.valid_input(c) => {
                             machine.transition(key);
                             match machine.state.clone() {
