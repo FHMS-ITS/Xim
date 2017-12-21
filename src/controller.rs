@@ -526,6 +526,8 @@ impl Controller {
                             self.model.set_index(start.into());
                         }
 
+                        self.view.hex_view.scroll_to(self.model.get_index());
+
                         self.model.snapshot();
                     } else {
                         unreachable!();
