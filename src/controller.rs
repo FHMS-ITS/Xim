@@ -215,20 +215,26 @@ impl Controller {
 
     // TODO: Refactor into VimStateMachine
     pub fn transition(&mut self, key: Key) -> bool {
-        use self::VimState::*;
         use termion::event::Key::{Alt, Char, Esc, Delete, Backspace, Left, Right, Up, Down, Insert, Ctrl};
+
+        // TODO: Quickfix for tmux
+        let key = if key == Alt('\u{1b}') {
+            Esc
+        } else {
+            key
+        };
 
         let mut run = true;
 
         self.state = match self.state.clone() {
-            Normal => match key {
+            VimState::Normal => match key {
                 Left | Right | Up | Down | Char('h') | Char('l') | Char('k') | Char('j') => {
                     self.make_move(key);
-                    Normal
+                    VimState::Normal
                 }
                 Backspace => {
                     self.make_move(Left);
-                    Normal
+                    VimState::Normal
                 }
                 Char('\t') => {
                     self.mode = match self.mode {
@@ -242,7 +248,7 @@ impl Controller {
                         }
                         InputMode::Binary => unimplemented!(),
                     };
-                    Normal
+                    VimState::Normal
                 }
                 Char('a') => {
                     self.change_to_insert_mode();
@@ -257,7 +263,7 @@ impl Controller {
                     self.yank = Some(self.model.buffer[self.model.get_index()..self.model.get_index() + 1].to_owned());
                     self.remove_right();
                     self.model.snapshot();
-                    Normal
+                    VimState::Normal
                 }
                 Char('r') => {
                     self.change_to_replace_mode();
@@ -269,20 +275,20 @@ impl Controller {
                 }
                 Char('v') => {
                     self.change_to_visual_mode();
-                    Visual
+                    VimState::Visual
                 }
                 Char(':') => {
                     self.change_to_command_mode();
-                    Command(String::new())
+                    VimState::Command(String::new())
                 }
                 Char('\n') => {
                     self.make_move(Down);
                     self.set_index_aligned();
-                    Normal
+                    VimState::Normal
                 }
                 Char('y') => {
                     self.yank = Some(self.model.buffer[self.model.get_index()..self.model.get_index() + 1].to_owned());
-                    Normal
+                    VimState::Normal
                 }
                 Char('p') => {
                     if let Some(value) = self.yank.clone() {
@@ -292,7 +298,7 @@ impl Controller {
                     } else {
                         //
                     }
-                    Normal
+                    VimState::Normal
                 }
                 Char('P') => {
                     if let Some(value) = self.yank.clone() {
@@ -303,27 +309,27 @@ impl Controller {
                     } else {
                         //
                     }
-                    Normal
+                    VimState::Normal
                 }
                 Char('u') => {
                     if !self.model.undo() {
                         self.view.status_view.set_body("Nothing to undo");
                     }
                     self.view.hex_view.scroll_to(self.model.get_index());
-                    Normal
+                    VimState::Normal
                 }
                 Ctrl('r') => {
                     if !self.model.redo() {
                         self.view.status_view.set_body("Nothing to redo");
                     }
                     self.view.hex_view.scroll_to(self.model.get_index());
-                    Normal
+                    VimState::Normal
                 }
-                Esc | Alt('\u{1b}') => { // TODO: Quickfix for tmux
+                Esc => {
                     self.change_to_normal_mode();
-                    Normal
+                    VimState::Normal
                 }
-                _ => Normal,
+                _ => VimState::Normal,
             },
             VimState::Insert(mut machine) => {
                 if machine.initial() {
@@ -373,9 +379,9 @@ impl Controller {
                             };
                             VimState::Insert(InputStateMachine::new(self.mode))
                         }
-                        Esc | Alt('\u{1b}') => { // TODO: Quickfix for tmux
+                        Esc => {
                             self.change_to_normal_mode();
-                            Normal
+                            VimState::Normal
                         }
                         _ => VimState::Insert(machine)
                     }
@@ -394,24 +400,24 @@ impl Controller {
                                 }
                             }
                         }
-                        Esc | Alt('\u{1b}') => { // TODO: Quickfix for tmux
+                        Esc => {
                             self.change_to_normal_mode();
-                            Normal
+                            VimState::Normal
                         }
                         _ => VimState::Insert(machine)
                     }
                 }
             },
-            Replace(mut machine, many) => {
+            VimState::Replace(mut machine, many) => {
                 if machine.initial() {
                     match key {
                         Left | Right | Up | Down | Char('h') | Char('l') | Char('k') | Char('j') if many => {
                             self.make_move(key);
-                            Replace(machine, many)
+                            VimState::Replace(machine, many)
                         }
                         Backspace => {
                             self.make_move(Left);
-                            Replace(machine, many)
+                            VimState::Replace(machine, many)
                         }
                         Char(c) if machine.valid_input(c) => {
                             machine.transition(key);
@@ -446,9 +452,9 @@ impl Controller {
                             };
                             VimState::Replace(InputStateMachine::new(self.mode), many)
                         }
-                        Esc | Alt('\u{1b}') => { // TODO: Quickfix for tmux
+                        Esc => {
                             self.change_to_normal_mode();
-                            Normal
+                            VimState::Normal
                         }
                         _ => VimState::Replace(machine, many)
                     }
@@ -473,19 +479,19 @@ impl Controller {
                                 }
                             }
                         }
-                        Esc | Alt('\u{1b}') => { // TODO: Quickfix for tmux
+                        Esc => {
                             self.change_to_normal_mode();
-                            Normal
+                            VimState::Normal
                         }
                         _ => VimState::Replace(machine, many)
                     }
                 }
             },
-            Visual => match key {
+            VimState::Visual => match key {
                 Left | Right | Up | Down | Char('h') | Char('l') | Char('k') | Char('j') => {
                     self.make_move(key);
                     self.view.hex_view.scroll_to(self.model.get_index());
-                    Visual
+                    VimState::Visual
                 }
                 Char('y') => {
                     if let Caret::Visual(start, end) = self.model.caret {
@@ -500,7 +506,7 @@ impl Controller {
                         unreachable!();
                     }
                     self.change_to_normal_mode();
-                    Normal
+                    VimState::Normal
                 }
                 Char('o') => {
                     if let Caret::Visual(ref mut start, ref mut end) = self.model.caret {
@@ -508,7 +514,7 @@ impl Controller {
                     } else {
                         panic!("wrong caret in visual state");
                     }
-                    Visual
+                    VimState::Visual
                 }
                 Char('x') | Char('d') => {
                     if let Caret::Visual(start, end) = self.model.caret {
@@ -533,15 +539,15 @@ impl Controller {
                         unreachable!();
                     }
                     self.change_to_normal_mode();
-                    Normal
+                    VimState::Normal
                 }
-                Esc | Alt('\u{1b}') => { // TODO: Quickfix for tmux
+                Esc => {
                     self.change_to_normal_mode();
-                    Normal
+                    VimState::Normal
                 }
-                _ => Visual
+                _ => VimState::Visual
             },
-            Command(mut cmd) => match key {
+            VimState::Command(mut cmd) => match key {
                 Char('\n') => {
                     match VimCommand::parse(&cmd) {
                         Ok(cmd) => match cmd {
@@ -572,23 +578,23 @@ impl Controller {
                             self.view.status_view.set_body(msg);
                         }
                     }
-                    Normal
+                    VimState::Normal
                 }
                 Backspace => {
                     cmd.pop();
                     self.view.status_view.set_body(&format!(":{}", &cmd));
-                    Command(cmd)
+                    VimState::Command(cmd)
                 }
                 Char(c) => {
                     cmd.push(c);
                     self.view.status_view.set_body(&format!(":{}", &cmd));
-                    Command(cmd)
+                    VimState::Command(cmd)
                 }
-                Esc | Alt('\u{1b}') => { // TODO: Quickfix for tmux
+                Esc => {
                     self.view.status_view.set_body("");
-                    Normal
+                    VimState::Normal
                 }
-                _ => Command(cmd)
+                _ => VimState::Command(cmd)
             },
         };
 
