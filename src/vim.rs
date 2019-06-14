@@ -122,6 +122,7 @@ pub enum VimCommand {
     Quit,
     QuitWithoutSaving,
     Save,
+    SaveAs(String),
     SaveAndQuit,
     Jump(usize),
 }
@@ -129,6 +130,10 @@ pub enum VimCommand {
 impl VimCommand {
     pub fn parse(cmd: &str) -> Result<VimCommand, &'static str> {
         use self::VimCommand::*;
+
+        if cmd.starts_with("w ") {
+            return Ok(SaveAs(cmd[2..].trim().into()))
+        }
 
         match cmd {
             "q" => Ok(Quit),

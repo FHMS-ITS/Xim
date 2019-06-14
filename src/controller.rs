@@ -55,6 +55,19 @@ impl Controller {
         }
     }
 
+    pub fn save_as(&mut self, path: String) -> bool {
+        match self.model.save_as(&path) {
+            Ok(_) => {
+                self.view.status_view.set_body(&format!("\"{}\" saved", &path));
+                true
+            }
+            Err(error) => {
+                self.view.status_view.set_body(&format!("could not save \"{}\": {}", self.model.path, error));
+                false
+            }
+        }
+    }
+
     // Moving
 
     pub fn change_to_normal_mode(&mut self) {
@@ -563,6 +576,9 @@ impl Controller {
                             }
                             VimCommand::Save => {
                                 self.save();
+                            }
+                            VimCommand::SaveAs(path) => {
+                                self.save_as(path);
                             }
                             VimCommand::SaveAndQuit => {
                                 if self.save() {

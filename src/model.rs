@@ -50,7 +50,11 @@ impl Model {
     }
 
     pub fn save(&self) -> IoResult<()> {
-        let mut file = File::create(&self.path)?;
+        self.save_as(&self.path)
+    }
+
+    pub fn save_as(&self, path: &str) -> IoResult<()> {
+        let mut file = File::create(&path)?;
         file.write_all(&self.buffer)?;
         Ok(())
     }
