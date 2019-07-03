@@ -7,6 +7,8 @@ use super::UsizeMax;
 use super::vim::{VimState, VimCommand, InputStateMachine, InputMode, InputState};
 
 use std::mem::swap;
+use clipboard::{ClipboardProvider, ClipboardContext};
+use std::cmp::min;
 use termion;
 use termion::event::Key;
 
@@ -16,6 +18,32 @@ pub struct Controller {
     pub view: View,
     mode: InputMode,
     yank: Option<Vec<u8>>,
+}
+
+fn save_to_clipboard(data: &[u8]) -> Result<String, String> {
+    let cb: Result<ClipboardContext, _> = ClipboardProvider::new().map_err(|e| format!("{}", e));
+    let mut cb = cb?;
+
+    match cb.set_contents(hex::encode(data)) {
+        Ok(_) => {
+            match data.len() {
+                0 => Err("No data to copy".into()),
+                1 => Ok(format!("Copied to clipboard ({})", hex::encode(&data[..1]))),
+                _ => Ok(format!("Copied to clipboard ({}...)", hex::encode(&data[..min(data.len(), 3)]))),
+            }
+        }
+        Err(e) => {
+            Err(format!("Failed copy to clipboard ({})", e))
+        }
+    }
+}
+
+fn read_from_clipboard() -> Result<Vec<u8>, String> {
+    let cb: Result<ClipboardContext, _> = ClipboardProvider::new().map_err(|e| format!("{}", e));
+    let mut cb = cb?;
+
+    let data = cb.get_contents().map_err(|e| format!("{}", e))?;
+    hex::decode(&data).map_err(|e| format!("{}", e))
 }
 
 impl Controller {
@@ -299,6 +327,14 @@ impl Controller {
                     self.set_index_aligned();
                     VimState::Normal
                 }
+                Ctrl('c') => {
+                    let bytes = &self.model.buffer[self.model.get_index()..self.model.get_index() + 1];
+                    match save_to_clipboard(bytes) {
+                        Ok(msg) | Err(msg) => self.view.status_view.set_body(&msg)
+                    };
+ 
+                    VimState::Normal
+                }
                 Char('y') => {
                     self.yank = Some(self.model.buffer[self.model.get_index()..self.model.get_index() + 1].to_owned());
                     VimState::Normal
@@ -391,6 +427,15 @@ impl Controller {
                                 InputMode::Binary => unimplemented!(),
                             };
                             VimState::Insert(InputStateMachine::new(self.mode))
+                        }
+                        Ctrl('v') => {
+                            if let Ok(value) = read_from_clipboard() {
+                                let index = self.model.get_index();
+                                self.paste(index, &value);
+                                self.model.snapshot();
+                            }
+
+                            VimState::Insert(machine)
                         }
                         Esc => {
                             self.change_to_normal_mode();
@@ -520,6 +565,24 @@ impl Controller {
                     }
                     self.change_to_normal_mode();
                     VimState::Normal
+                }
+                Ctrl('c') => {
+                    if let Caret::Visual(start, end) = self.model.caret {
+                        let (start, end) = if usize::from(start) > usize::from(end) {
+                            (end, start)
+                        } else {
+                            (start, end)
+                        };
+
+                        let bytes = &self.model.buffer[start.into()..usize::from(end) + 1];
+                        match save_to_clipboard(bytes) {
+                            Ok(msg) | Err(msg) => self.view.status_view.set_body(&msg)
+                        };
+                    } else {
+                        unreachable!();
+                    }
+
+                    VimState::Visual
                 }
                 Char('o') => {
                     if let Caret::Visual(ref mut start, ref mut end) = self.model.caret {

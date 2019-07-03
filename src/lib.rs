@@ -1,5 +1,7 @@
 extern crate chan;
 extern crate chan_signal;
+extern crate clipboard;
+extern crate hex;
 extern crate termion;
 
 use chan_signal::{Signal, notify};

@@ -6,8 +6,10 @@ authors = ["Damian Poddebniak <poddebniak@fh-muenster.de>"]
 [dependencies]
 chan         = "*"
 chan-signal  = "*"
+clipboard    = "*"
 clippy       = {version = "*", optional = true}
 docopt       = "*"
+hex          = "*"
 serde        = "*"
 serde_derive = "*"
 termion      = "*"
