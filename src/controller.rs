@@ -43,6 +43,8 @@ fn read_from_clipboard() -> Result<Vec<u8>, String> {
     let mut cb = cb?;
 
     let data = cb.get_contents().map_err(|e| format!("{}", e))?;
+    let data: String = data.chars().filter(|c| !c.is_whitespace()).collect();
+
     hex::decode(&data).map_err(|e| format!("{}", e))
 }
 
@@ -429,10 +431,15 @@ impl Controller {
                             VimState::Insert(InputStateMachine::new(self.mode))
                         }
                         Ctrl('v') => {
-                            if let Ok(value) = read_from_clipboard() {
-                                let index = self.model.get_index();
-                                self.paste(index, &value);
-                                self.model.snapshot();
+                            match read_from_clipboard() {
+                                Ok(value) => {
+                                    let index = self.model.get_index();
+                                    self.paste(index, &value);
+                                    self.model.snapshot();
+                                }
+                                Err(ref e) => {
+                                    self.view.status_view.set_body(e);
+                                }
                             }
 
                             VimState::Insert(machine)

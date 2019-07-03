@@ -1,6 +1,6 @@
 [package]
 name = "xim"
-version = "0.4.1"
+version = "0.4.2"
 authors = ["Damian Poddebniak <poddebniak@fh-muenster.de>"]
 
 [dependencies]
