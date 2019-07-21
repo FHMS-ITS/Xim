@@ -33,19 +33,19 @@ enum Event {
     Kill,
 }
 
-pub struct Config {
+pub struct Args {
     pub file: String,
 }
 
 pub struct App {
-    config: Config,
+    args: Args,
     stdout: RawStdout,
 }
 
 impl App {
-    pub fn new(config: Config) -> App {
+    pub fn new(args: Args) -> App {
         App {
-            config: config,
+            args: args,
             stdout: Rc::new(RefCell::new(AlternateScreen::from(
                 stdout().into_raw_mode().unwrap(),
             ))),
@@ -89,7 +89,7 @@ impl App {
         let mut ctrl = Controller::new(Model::new(), View::new(self.stdout.clone()));
 
         ctrl.resize_view(termion::terminal_size()?);
-        ctrl.open(&self.config.file);
+        ctrl.open(&self.args.file);
         ctrl.update_view();
 
         for event in events.iter() {

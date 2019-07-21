@@ -1,7 +1,6 @@
-use xim::{App, Config};
-
 use docopt::Docopt;
 use serde_derive::Deserialize;
+use xim::{App, Args};
 
 const USAGE: &str = "
 Xim
@@ -20,14 +19,14 @@ Options:
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Deserialize)]
-struct Args {
+struct DocoptArgs {
     arg_file: String,
 }
 
-// Translation of main::Args to a xim::Config
-impl From<Args> for Config {
-    fn from(args: Args) -> Self {
-        Config {
+// Translation of `DocoptArgs` to `xim::Args`
+impl From<DocoptArgs> for Args {
+    fn from(args: DocoptArgs) -> Args {
+        Args {
             file: args.arg_file,
         }
     }
@@ -35,7 +34,7 @@ impl From<Args> for Config {
 
 fn main() -> Result<(), Box<std::error::Error>> {
     // Parse arguments
-    let args: Args = Docopt::new(USAGE)
+    let args: DocoptArgs = Docopt::new(USAGE)
         .and_then(|d| d.version(Some(VERSION.into())).deserialize())
         .unwrap_or_else(|e| e.exit());
 
