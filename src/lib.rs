@@ -2,14 +2,14 @@ use std::{
     cell::RefCell,
     cmp::min,
     error::Error,
-    io::{Write, Stdout, stdout, stdin},
-    ops::{Add, AddAssign, Drop, Sub, SubAssign, Rem, RemAssign},
+    io::{stdin, stdout, Stdout, Write},
+    ops::{Add, AddAssign, Drop, Rem, RemAssign, Sub, SubAssign},
     rc::Rc,
     sync::mpsc::sync_channel,
     thread,
 };
 
-use chan_signal::{Signal, notify};
+use chan_signal::{notify, Signal};
 use termion::{
     event::Key,
     input::TermRead,
@@ -18,16 +18,12 @@ use termion::{
 };
 
 mod controller;
+mod history;
 mod model;
 mod view;
-mod history;
 mod vim;
 
-use {
-    controller::Controller,
-    model::Model,
-    view::View
-};
+use {controller::Controller, model::Model, view::View};
 
 pub type RawStdout = Rc<RefCell<AlternateScreen<RawTerminal<Stdout>>>>;
 
@@ -50,11 +46,9 @@ impl App {
     pub fn new(config: Config) -> App {
         App {
             config: config,
-            stdout: Rc::new(
-                RefCell::new(
-                    AlternateScreen::from(stdout().into_raw_mode().unwrap())
-                )
-            ),
+            stdout: Rc::new(RefCell::new(AlternateScreen::from(
+                stdout().into_raw_mode().unwrap(),
+            ))),
         }
     }
 
@@ -72,9 +66,11 @@ impl App {
             thread::spawn(move || {
                 for signal in signals.iter() {
                     match signal {
-                        Signal::WINCH => send_1.send(Event::Resize(termion::terminal_size().unwrap())).unwrap(),
+                        Signal::WINCH => send_1
+                            .send(Event::Resize(termion::terminal_size().unwrap()))
+                            .unwrap(),
                         Signal::TERM => send_1.send(Event::Kill).unwrap(),
-                        _ => {},
+                        _ => {}
                     }
                 }
             });
@@ -90,10 +86,7 @@ impl App {
             recv
         };
 
-        let mut ctrl = Controller::new(
-            Model::new(),
-            View::new(self.stdout.clone())
-        );
+        let mut ctrl = Controller::new(Model::new(), View::new(self.stdout.clone()));
 
         ctrl.resize_view(termion::terminal_size()?);
         ctrl.open(&self.config.file);
@@ -103,7 +96,7 @@ impl App {
             match event {
                 Event::Key(k) => {
                     if !ctrl.transition(k) {
-                        break
+                        break;
                     }
                 }
                 Event::Resize(new_size) => ctrl.resize_view(new_size),
@@ -163,7 +156,7 @@ pub trait Ascii {
 
 impl Ascii for u8 {
     fn to_printable(self: u8) -> char {
-        if self >= 32 && self <= 126  {
+        if self >= 32 && self <= 126 {
             self as char
         } else {
             '.'
@@ -320,7 +313,7 @@ mod tests {
 
     use quickcheck::quickcheck;
 
-    quickcheck!{
+    quickcheck! {
         fn test_align(index: u16, random: u16, boundary: u16) -> bool {
             match boundary {
                 0 => align(index, boundary) == index,
@@ -330,7 +323,7 @@ mod tests {
         }
     }
 
-    quickcheck!{
+    quickcheck! {
         fn test_align_top(index: u16, random: u16, boundary: u16) -> bool {
             match boundary {
                 0 => align_top(index, boundary) == index,
@@ -340,7 +333,7 @@ mod tests {
         }
     }
 
-    quickcheck!{
+    quickcheck! {
         fn test_usizemax(value: usize, max: usize, operations: Vec<(u8, usize)>) -> bool {
             let mut value = UsizeMax::new(value, max);
 
@@ -356,7 +349,7 @@ mod tests {
         }
     }
 
-    quickcheck!{
+    quickcheck! {
         fn test_move_window(start: usize, height: usize, index: usize) -> bool {
             if let Some(new_start) = move_window(start, height, index) {
                 // Do not move when unnecessary...

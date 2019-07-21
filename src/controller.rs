@@ -1,15 +1,15 @@
 use crate::{
-    Caret::{self, *},
     model::*,
-    UsizeMax,
     view::*,
     vim::*,
+    Caret::{self, *},
+    UsizeMax,
 };
 
 use std::cmp::min;
 use std::mem::swap;
 
-use clipboard::{ClipboardProvider, ClipboardContext};
+use clipboard::{ClipboardContext, ClipboardProvider};
 use termion::{self, event::Key};
 
 pub struct Controller {
@@ -25,16 +25,15 @@ fn save_to_clipboard(data: &[u8]) -> Result<String, String> {
     let mut cb = cb?;
 
     match cb.set_contents(hex::encode(data)) {
-        Ok(_) => {
-            match data.len() {
-                0 => Err("No data to copy".into()),
-                1 => Ok(format!("Copied to clipboard ({})", hex::encode(&data[..1]))),
-                _ => Ok(format!("Copied to clipboard ({}...)", hex::encode(&data[..min(data.len(), 3)]))),
-            }
-        }
-        Err(e) => {
-            Err(format!("Failed copy to clipboard ({})", e))
-        }
+        Ok(_) => match data.len() {
+            0 => Err("No data to copy".into()),
+            1 => Ok(format!("Copied to clipboard ({})", hex::encode(&data[..1]))),
+            _ => Ok(format!(
+                "Copied to clipboard ({}...)",
+                hex::encode(&data[..min(data.len(), 3)])
+            )),
+        },
+        Err(e) => Err(format!("Failed copy to clipboard ({})", e)),
     }
 }
 
@@ -63,23 +62,24 @@ impl Controller {
 
     pub fn open(&mut self, path: &str) {
         match self.model.open(path) {
-            Ok(_) => {
-                self.view.status_view.set_head(path)
-            }
-            Err(e) => {
-                self.view.status_view.set_head(&format!("error: {}", e))
-            }
+            Ok(_) => self.view.status_view.set_head(path),
+            Err(e) => self.view.status_view.set_head(&format!("error: {}", e)),
         }
     }
 
     pub fn save(&mut self) -> bool {
         match self.model.save() {
             Ok(_) => {
-                self.view.status_view.set_body(&format!("\"{}\" saved", self.model.path));
+                self.view
+                    .status_view
+                    .set_body(&format!("\"{}\" saved", self.model.path));
                 true
             }
             Err(error) => {
-                self.view.status_view.set_body(&format!("could not save \"{}\": {}", self.model.path, error));
+                self.view.status_view.set_body(&format!(
+                    "could not save \"{}\": {}",
+                    self.model.path, error
+                ));
                 false
             }
         }
@@ -88,11 +88,16 @@ impl Controller {
     pub fn save_as(&mut self, path: String) -> bool {
         match self.model.save_as(&path) {
             Ok(_) => {
-                self.view.status_view.set_body(&format!("\"{}\" saved", &path));
+                self.view
+                    .status_view
+                    .set_body(&format!("\"{}\" saved", &path));
                 true
             }
             Err(error) => {
-                self.view.status_view.set_body(&format!("could not save \"{}\": {}", self.model.path, error));
+                self.view.status_view.set_body(&format!(
+                    "could not save \"{}\": {}",
+                    self.model.path, error
+                ));
                 false
             }
         }
@@ -102,35 +107,53 @@ impl Controller {
 
     pub fn change_to_normal_mode(&mut self) {
         self.model.caret = match self.model.caret {
-            Index(index) => Offset(UsizeMax::new(index.value.saturating_sub(1), index.get_maximum().saturating_sub(1))),
-            Offset(index) |
-            Replace(index) |
-            Visual(_, index) => Offset(index),
+            Index(index) => Offset(UsizeMax::new(
+                index.value.saturating_sub(1),
+                index.get_maximum().saturating_sub(1),
+            )),
+            Offset(index) | Replace(index) | Visual(_, index) => Offset(index),
         };
 
-        self.view.status_view.set_body(&format!("{}-- Normal ({:?}) --{}", termion::style::Bold, self.mode, termion::style::Reset)); // TODO
+        self.view.status_view.set_body(&format!(
+            "{}-- Normal ({:?}) --{}",
+            termion::style::Bold,
+            self.mode,
+            termion::style::Reset
+        )); // TODO
     }
 
     pub fn change_to_insert_mode(&mut self) {
         self.model.caret = match self.model.caret {
             Index(index) => Index(index),
-            Offset(index) |
-            Replace(index) |
-            Visual(_, index) => Index(UsizeMax::new(index.value, index.get_maximum().saturating_add(1))),
+            Offset(index) | Replace(index) | Visual(_, index) => Index(UsizeMax::new(
+                index.value,
+                index.get_maximum().saturating_add(1),
+            )),
         };
 
-        self.view.status_view.set_body(&format!("{}-- Insert ({:?}) --{}", termion::style::Bold, self.mode, termion::style::Reset)); // TODO
+        self.view.status_view.set_body(&format!(
+            "{}-- Insert ({:?}) --{}",
+            termion::style::Bold,
+            self.mode,
+            termion::style::Reset
+        )); // TODO
     }
 
     pub fn change_to_replace_mode(&mut self) {
         self.model.caret = match self.model.caret {
-            Index(index) => Replace(UsizeMax::new(index.value, index.get_maximum().saturating_sub(1))),
-            Offset(index) |
-            Replace(index) |
-            Visual(_, index) => Replace(index),
+            Index(index) => Replace(UsizeMax::new(
+                index.value,
+                index.get_maximum().saturating_sub(1),
+            )),
+            Offset(index) | Replace(index) | Visual(_, index) => Replace(index),
         };
 
-        self.view.status_view.set_body(&format!("{}-- Replace ({:?}) --{}", termion::style::Bold, self.mode, termion::style::Reset)); // TODO
+        self.view.status_view.set_body(&format!(
+            "{}-- Replace ({:?}) --{}",
+            termion::style::Bold,
+            self.mode,
+            termion::style::Reset
+        )); // TODO
     }
 
     pub fn change_to_command_mode(&mut self) {
@@ -139,22 +162,23 @@ impl Controller {
 
     pub fn change_to_visual_mode(&mut self) {
         self.model.caret = match self.model.caret {
-            Index(index) => {
-                Visual(
-                    UsizeMax::new(index.value, index.get_maximum().saturating_sub(1)),
-                    UsizeMax::new(index.value, index.get_maximum().saturating_sub(1))
-                )
-            }
-            Offset(index) |
-            Replace(index) => Visual(index, index),
+            Index(index) => Visual(
+                UsizeMax::new(index.value, index.get_maximum().saturating_sub(1)),
+                UsizeMax::new(index.value, index.get_maximum().saturating_sub(1)),
+            ),
+            Offset(index) | Replace(index) => Visual(index, index),
             Visual(start, begin) => Visual(start, begin),
         };
 
-        self.view.status_view.set_body(&format!("{}-- Visual --{}", termion::style::Bold, termion::style::Reset));
+        self.view.status_view.set_body(&format!(
+            "{}-- Visual --{}",
+            termion::style::Bold,
+            termion::style::Reset
+        ));
     }
 
     pub fn make_move(&mut self, direction: termion::event::Key) {
-        use termion::event::Key::{Left, Right, Up, Down, Char};
+        use termion::event::Key::{Char, Down, Left, Right, Up};
 
         match direction {
             Left | Char('h') => self.model.dec_index(1),
@@ -175,10 +199,10 @@ impl Controller {
         self.view.hex_view.scroll_to(self.model.get_index());
 
         let index = match self.model.caret {
-            Caret::Index(index) |
-            Caret::Offset(index) |
-            Caret::Replace(index) |
-            Caret::Visual(_, index) => index,
+            Caret::Index(index)
+            | Caret::Offset(index)
+            | Caret::Replace(index)
+            | Caret::Visual(_, index) => index,
         };
 
         self.view.status_view.set_index(index.into());
@@ -194,14 +218,18 @@ impl Controller {
     pub fn insert(&mut self, value: u8) {
         let index = self.model.get_index();
         if let Err(e) = self.model.edit(index, index, &[value]) {
-            self.view.status_view.set_body(&format!("could not insert value ({})", e));
+            self.view
+                .status_view
+                .set_body(&format!("could not insert value ({})", e));
         }
         self.model.inc_index(1);
     }
 
     pub fn paste(&mut self, index: usize, value: &[u8]) {
         if let Err(e) = self.model.edit(index, index, value) {
-            self.view.status_view.set_body(&format!("could not insert value ({})", e));
+            self.view
+                .status_view
+                .set_body(&format!("could not insert value ({})", e));
         }
         self.model.inc_index(value.len());
         self.view.hex_view.scroll_to(self.model.get_index());
@@ -214,7 +242,9 @@ impl Controller {
         let end = index == self.model.buffer.len();
 
         if let Err(e) = self.model.edit(index.saturating_sub(1), index, &[]) {
-            self.view.status_view.set_body(&format!("could not remove value ({})", e));
+            self.view
+                .status_view
+                .set_body(&format!("could not remove value ({})", e));
         }
 
         // ...thus do not move again. (TODO: Refactor)
@@ -225,15 +255,19 @@ impl Controller {
 
     pub fn remove_right(&mut self) {
         let index = self.model.get_index();
-        if let Err(e) = self.model.edit(index,index.saturating_add(1), &[]) {
-            self.view.status_view.set_body(&format!("could not remove value ({})", e));
+        if let Err(e) = self.model.edit(index, index.saturating_add(1), &[]) {
+            self.view
+                .status_view
+                .set_body(&format!("could not remove value ({})", e));
         }
     }
 
     pub fn replace(&mut self, value: u8) {
         let index = self.model.get_index();
         if let Err(e) = self.model.edit(index, index.saturating_add(1), &[value]) {
-            self.view.status_view.set_body(&format!("could not replace value ({})", e));
+            self.view
+                .status_view
+                .set_body(&format!("could not replace value ({})", e));
         }
     }
 
@@ -242,7 +276,7 @@ impl Controller {
     pub fn resize_view(&mut self, size: (u16, u16)) {
         self.view.set_area(DrawArea {
             origin: (1, 1),
-            dimens: size
+            dimens: size,
         });
     }
 
@@ -258,14 +292,12 @@ impl Controller {
 
     // TODO: Refactor into VimStateMachine
     pub fn transition(&mut self, key: Key) -> bool {
-        use termion::event::Key::{Alt, Char, Esc, Delete, Backspace, Left, Right, Up, Down, Insert, Ctrl};
+        use termion::event::Key::{
+            Alt, Backspace, Char, Ctrl, Delete, Down, Esc, Insert, Left, Right, Up,
+        };
 
         // TODO: Quickfix for tmux
-        let key = if key == Alt('\u{1b}') {
-            Esc
-        } else {
-            key
-        };
+        let key = if key == Alt('\u{1b}') { Esc } else { key };
 
         let mut run = true;
 
@@ -303,7 +335,10 @@ impl Controller {
                     VimState::Insert(InputStateMachine::new(self.mode))
                 }
                 Delete | Char('x') => {
-                    self.yank = Some(self.model.buffer[self.model.get_index()..self.model.get_index() + 1].to_owned());
+                    self.yank = Some(
+                        self.model.buffer[self.model.get_index()..self.model.get_index() + 1]
+                            .to_owned(),
+                    );
                     self.remove_right();
                     self.model.snapshot();
                     VimState::Normal
@@ -330,15 +365,19 @@ impl Controller {
                     VimState::Normal
                 }
                 Ctrl('c') => {
-                    let bytes = &self.model.buffer[self.model.get_index()..self.model.get_index() + 1];
+                    let bytes =
+                        &self.model.buffer[self.model.get_index()..self.model.get_index() + 1];
                     match save_to_clipboard(bytes) {
-                        Ok(msg) | Err(msg) => self.view.status_view.set_body(&msg)
+                        Ok(msg) | Err(msg) => self.view.status_view.set_body(&msg),
                     };
- 
+
                     VimState::Normal
                 }
                 Char('y') => {
-                    self.yank = Some(self.model.buffer[self.model.get_index()..self.model.get_index() + 1].to_owned());
+                    self.yank = Some(
+                        self.model.buffer[self.model.get_index()..self.model.get_index() + 1]
+                            .to_owned(),
+                    );
                     VimState::Normal
                 }
                 Char('p') => {
@@ -411,9 +450,7 @@ impl Controller {
                                     self.model.snapshot();
                                     VimState::Insert(InputStateMachine::new(self.mode))
                                 }
-                                InputState::Incomplete(_) => {
-                                    VimState::Insert(machine)
-                                }
+                                InputState::Incomplete(_) => VimState::Insert(machine),
                             }
                         }
                         Char('\t') => {
@@ -448,7 +485,7 @@ impl Controller {
                             self.change_to_normal_mode();
                             VimState::Normal
                         }
-                        _ => VimState::Insert(machine)
+                        _ => VimState::Insert(machine),
                     }
                 } else {
                     match key {
@@ -460,23 +497,24 @@ impl Controller {
                                     self.model.snapshot();
                                     VimState::Insert(InputStateMachine::new(self.mode))
                                 }
-                                InputState::Incomplete(_) => {
-                                    VimState::Insert(machine)
-                                }
+                                InputState::Incomplete(_) => VimState::Insert(machine),
                             }
                         }
                         Esc => {
                             self.change_to_normal_mode();
                             VimState::Normal
                         }
-                        _ => VimState::Insert(machine)
+                        _ => VimState::Insert(machine),
                     }
                 }
-            },
+            }
             VimState::Replace(mut machine, many) => {
                 if machine.initial() {
                     match key {
-                        Left | Right | Up | Down | Char('h') | Char('l') | Char('k') | Char('j') if many => {
+                        Left | Right | Up | Down | Char('h') | Char('l') | Char('k')
+                        | Char('j')
+                            if many =>
+                        {
                             self.make_move(key);
                             VimState::Replace(machine, many)
                         }
@@ -498,9 +536,7 @@ impl Controller {
                                         VimState::Normal
                                     }
                                 }
-                                InputState::Incomplete(_) => {
-                                    VimState::Replace(machine, many)
-                                }
+                                InputState::Incomplete(_) => VimState::Replace(machine, many),
                             }
                         }
                         Char('\t') => {
@@ -521,7 +557,7 @@ impl Controller {
                             self.change_to_normal_mode();
                             VimState::Normal
                         }
-                        _ => VimState::Replace(machine, many)
+                        _ => VimState::Replace(machine, many),
                     }
                 } else {
                     match key {
@@ -539,19 +575,17 @@ impl Controller {
                                         VimState::Normal
                                     }
                                 }
-                                InputState::Incomplete(_) => {
-                                    VimState::Replace(machine, many)
-                                }
+                                InputState::Incomplete(_) => VimState::Replace(machine, many),
                             }
                         }
                         Esc => {
                             self.change_to_normal_mode();
                             VimState::Normal
                         }
-                        _ => VimState::Replace(machine, many)
+                        _ => VimState::Replace(machine, many),
                     }
                 }
-            },
+            }
             VimState::Visual => match key {
                 Left | Right | Up | Down | Char('h') | Char('l') | Char('k') | Char('j') => {
                     self.make_move(key);
@@ -566,7 +600,8 @@ impl Controller {
                             (start, end)
                         };
 
-                        self.yank = Some(self.model.buffer[start.into()..usize::from(end) + 1].to_owned());
+                        self.yank =
+                            Some(self.model.buffer[start.into()..usize::from(end) + 1].to_owned());
                     } else {
                         unreachable!();
                     }
@@ -583,7 +618,7 @@ impl Controller {
 
                         let bytes = &self.model.buffer[start.into()..usize::from(end) + 1];
                         match save_to_clipboard(bytes) {
-                            Ok(msg) | Err(msg) => self.view.status_view.set_body(&msg)
+                            Ok(msg) | Err(msg) => self.view.status_view.set_body(&msg),
                         };
                     } else {
                         unreachable!();
@@ -607,10 +642,13 @@ impl Controller {
                             (start, end)
                         };
 
-                        self.yank = Some(self.model.buffer[start.into()..usize::from(end) + 1].to_owned());
+                        self.yank =
+                            Some(self.model.buffer[start.into()..usize::from(end) + 1].to_owned());
 
                         if let Err(e) = self.model.edit(start.into(), usize::from(end) + 1, &[]) {
-                            self.view.status_view.set_body(&format!("could not remove range ({})", e));
+                            self.view
+                                .status_view
+                                .set_body(&format!("could not remove range ({})", e));
                         } else {
                             self.model.set_index(start.into());
                         }
@@ -628,7 +666,7 @@ impl Controller {
                     self.change_to_normal_mode();
                     VimState::Normal
                 }
-                _ => VimState::Visual
+                _ => VimState::Visual,
             },
             VimState::Command(mut cmd) => match key {
                 Char('\n') => {
@@ -636,7 +674,9 @@ impl Controller {
                         Ok(cmd) => match cmd {
                             VimCommand::Quit => {
                                 if self.model.is_modified() {
-                                    self.view.status_view.set_body("save your changes with :w or force quit with :q!");
+                                    self.view.status_view.set_body(
+                                        "save your changes with :w or force quit with :q!",
+                                    );
                                 } else {
                                     run = false;
                                 }
@@ -659,7 +699,7 @@ impl Controller {
                                 self.set_index(offset);
                                 self.view.status_view.set_body("");
                             }
-                        }
+                        },
                         Err(msg) => {
                             self.view.status_view.set_body(msg);
                         }
@@ -680,7 +720,7 @@ impl Controller {
                     self.view.status_view.set_body("");
                     VimState::Normal
                 }
-                _ => VimState::Command(cmd)
+                _ => VimState::Command(cmd),
             },
         };
 

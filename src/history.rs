@@ -23,7 +23,7 @@ impl<T: Clone> History<T> {
 
     pub fn undo(&mut self) -> Option<T> {
         if !(self.done.len() > 1) {
-            return None
+            return None;
         }
 
         if let Some(action) = self.done.pop() {

@@ -1,13 +1,13 @@
 use crate::{
-    Caret::{self, *},
     history::History,
-    UsizeMax
+    Caret::{self, *},
+    UsizeMax,
 };
 
 use std::{
     fs::{File, OpenOptions},
-    io::{Read, Write, Result as IoResult},
-    mem::swap
+    io::{Read, Result as IoResult, Write},
+    mem::swap,
 };
 
 #[derive(Debug)]
@@ -48,7 +48,8 @@ impl Model {
         self.buffer = buffer;
         self.caret = Caret::Offset(UsizeMax::new(0, self.buffer.len().saturating_sub(1)));
 
-        self.history.init(&(self.buffer.clone(), self.caret.clone()));
+        self.history
+            .init(&(self.buffer.clone(), self.caret.clone()));
 
         Ok(())
     }
@@ -66,7 +67,12 @@ impl Model {
     // FIXME: better be conservative first...
     pub fn is_modified(&self) -> bool {
         let disc_content = {
-            let mut file = OpenOptions::new().create(false).read(true).write(false).open(&self.path).unwrap();
+            let mut file = OpenOptions::new()
+                .create(false)
+                .read(true)
+                .write(false)
+                .open(&self.path)
+                .unwrap();
             let mut buffer = Vec::new();
             file.read_to_end(&mut buffer).unwrap();
             buffer
@@ -77,42 +83,40 @@ impl Model {
 
     pub fn set_index(&mut self, new_index: usize) {
         match self.caret {
-            Index(ref mut index) |
-            Offset(ref mut index) |
-            Replace(ref mut index) |
-            Visual(_, ref mut index) => index.set_value(new_index),
+            Index(ref mut index)
+            | Offset(ref mut index)
+            | Replace(ref mut index)
+            | Visual(_, ref mut index) => index.set_value(new_index),
         }
     }
 
     pub fn get_index(&self) -> usize {
         match self.caret {
-            Index(index) |
-            Offset(index) |
-            Replace(index) |
-            Visual(_, index) => index.into(),
+            Index(index) | Offset(index) | Replace(index) | Visual(_, index) => index.into(),
         }
     }
 
     pub fn inc_index(&mut self, value: usize) {
         match self.caret {
-            Index(ref mut index) |
-            Offset(ref mut index) |
-            Replace(ref mut index) |
-            Visual(_, ref mut index) => *index += value,
+            Index(ref mut index)
+            | Offset(ref mut index)
+            | Replace(ref mut index)
+            | Visual(_, ref mut index) => *index += value,
         }
     }
 
     pub fn dec_index(&mut self, value: usize) {
         match self.caret {
-            Index(ref mut index) |
-            Offset(ref mut index) |
-            Replace(ref mut index) |
-            Visual(_, ref mut index) => *index -= value,
+            Index(ref mut index)
+            | Offset(ref mut index)
+            | Replace(ref mut index)
+            | Visual(_, ref mut index) => *index -= value,
         }
     }
 
     pub fn snapshot(&mut self) {
-        self.history.snapshot(&(self.buffer.clone(), self.caret.clone()));
+        self.history
+            .snapshot(&(self.buffer.clone(), self.caret.clone()));
     }
 
     pub fn undo(&mut self) -> bool {
@@ -149,8 +153,9 @@ impl Model {
 
         match self.caret {
             Index(ref mut index) => index.set_maximum(self.buffer.len()),
-            Offset(ref mut index) |
-            Replace(ref mut index) => index.set_maximum(self.buffer.len().saturating_sub(1)),
+            Offset(ref mut index) | Replace(ref mut index) => {
+                index.set_maximum(self.buffer.len().saturating_sub(1))
+            }
             Visual(ref mut start, ref mut end) => {
                 start.set_maximum(self.buffer.len().saturating_sub(1));
                 end.set_maximum(self.buffer.len().saturating_sub(1));
@@ -167,7 +172,7 @@ mod tests {
 
     use quickcheck::quickcheck;
 
-    quickcheck!{
+    quickcheck! {
         fn test_edit(buffer: Vec<u8>, start: usize, end: usize, new: Vec<u8>) -> bool {
             let mut buffer = buffer.clone();
 

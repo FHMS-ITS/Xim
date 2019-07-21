@@ -1,4 +1,4 @@
-use termion::event::Key::{self, Char, Backspace};
+use termion::event::Key::{self, Backspace, Char};
 
 #[derive(Copy, Clone, Debug)]
 pub enum InputMode {
@@ -111,7 +111,7 @@ impl VimCommand {
         use self::VimCommand::*;
 
         if cmd.starts_with("w ") {
-            return Ok(SaveAs(cmd[2..].trim().into()))
+            return Ok(SaveAs(cmd[2..].trim().into()));
         }
 
         match cmd {
@@ -138,7 +138,7 @@ impl VimCommand {
                 } else {
                     Err("no such command")
                 }
-            },
+            }
         }
     }
 }
