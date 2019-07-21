@@ -1,7 +1,5 @@
 use xim::{App, Config};
 
-use std::error::Error;
-
 use docopt::Docopt;
 use serde_derive::Deserialize;
 
@@ -35,7 +33,7 @@ impl From<Args> for Config {
     }
 }
 
-fn run() -> Result<(), Box<Error>> {
+fn main() -> Result<(), Box<std::error::Error>> {
     // Parse arguments
     let args: Args = Docopt::new(USAGE)
         .and_then(|d| d.version(Some(VERSION.into())).deserialize())
@@ -43,11 +41,4 @@ fn run() -> Result<(), Box<Error>> {
 
     // Run application
     App::new(args.into()).run()
-}
-
-fn main() {
-    run().unwrap_or_else(|e| {
-        eprintln!("error: {}", e);
-        std::process::exit(1);
-    });
 }
