@@ -1,14 +1,18 @@
-use crate::{
-    history::History,
-    Caret::{self, *},
-    UsizeMax,
-};
+use crate::{history::History, UsizeMax};
 
 use std::{
     fs::{File, OpenOptions},
     io::{Read, Result as IoResult, Write},
     mem::swap,
 };
+
+#[derive(Clone, Debug)]
+pub enum Caret {
+    Index(UsizeMax),
+    Offset(UsizeMax),
+    Replace(UsizeMax),
+    Visual(UsizeMax, UsizeMax),
+}
 
 #[derive(Debug)]
 pub struct Model {
@@ -83,34 +87,37 @@ impl Model {
 
     pub fn set_index(&mut self, new_index: usize) {
         match self.caret {
-            Index(ref mut index)
-            | Offset(ref mut index)
-            | Replace(ref mut index)
-            | Visual(_, ref mut index) => index.set_value(new_index),
+            Caret::Index(ref mut index)
+            | Caret::Offset(ref mut index)
+            | Caret::Replace(ref mut index)
+            | Caret::Visual(_, ref mut index) => index.set_value(new_index),
         }
     }
 
     pub fn get_index(&self) -> usize {
         match self.caret {
-            Index(index) | Offset(index) | Replace(index) | Visual(_, index) => index.into(),
+            Caret::Index(index)
+            | Caret::Offset(index)
+            | Caret::Replace(index)
+            | Caret::Visual(_, index) => index.into(),
         }
     }
 
     pub fn inc_index(&mut self, value: usize) {
         match self.caret {
-            Index(ref mut index)
-            | Offset(ref mut index)
-            | Replace(ref mut index)
-            | Visual(_, ref mut index) => *index += value,
+            Caret::Index(ref mut index)
+            | Caret::Offset(ref mut index)
+            | Caret::Replace(ref mut index)
+            | Caret::Visual(_, ref mut index) => *index += value,
         }
     }
 
     pub fn dec_index(&mut self, value: usize) {
         match self.caret {
-            Index(ref mut index)
-            | Offset(ref mut index)
-            | Replace(ref mut index)
-            | Visual(_, ref mut index) => *index -= value,
+            Caret::Index(ref mut index)
+            | Caret::Offset(ref mut index)
+            | Caret::Replace(ref mut index)
+            | Caret::Visual(_, ref mut index) => *index -= value,
         }
     }
 
@@ -152,11 +159,11 @@ impl Model {
         }
 
         match self.caret {
-            Index(ref mut index) => index.set_maximum(self.buffer.len()),
-            Offset(ref mut index) | Replace(ref mut index) => {
+            Caret::Index(ref mut index) => index.set_maximum(self.buffer.len()),
+            Caret::Offset(ref mut index) | Caret::Replace(ref mut index) => {
                 index.set_maximum(self.buffer.len().saturating_sub(1))
             }
-            Visual(ref mut start, ref mut end) => {
+            Caret::Visual(ref mut start, ref mut end) => {
                 start.set_maximum(self.buffer.len().saturating_sub(1));
                 end.set_maximum(self.buffer.len().saturating_sub(1));
             }

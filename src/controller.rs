@@ -1,8 +1,7 @@
 use crate::{
-    model::*,
+    model::{Caret, Model},
     view::*,
     vim::*,
-    Caret::{self, *},
     UsizeMax,
 };
 
@@ -107,11 +106,13 @@ impl Controller {
 
     pub fn change_to_normal_mode(&mut self) {
         self.model.caret = match self.model.caret {
-            Index(index) => Offset(UsizeMax::new(
+            Caret::Index(index) => Caret::Offset(UsizeMax::new(
                 index.value.saturating_sub(1),
                 index.get_maximum().saturating_sub(1),
             )),
-            Offset(index) | Replace(index) | Visual(_, index) => Offset(index),
+            Caret::Offset(index) | Caret::Replace(index) | Caret::Visual(_, index) => {
+                Caret::Offset(index)
+            }
         };
 
         self.view.status_view.set_body(&format!(
@@ -124,11 +125,10 @@ impl Controller {
 
     pub fn change_to_insert_mode(&mut self) {
         self.model.caret = match self.model.caret {
-            Index(index) => Index(index),
-            Offset(index) | Replace(index) | Visual(_, index) => Index(UsizeMax::new(
-                index.value,
-                index.get_maximum().saturating_add(1),
-            )),
+            Caret::Index(index) => Caret::Index(index),
+            Caret::Offset(index) | Caret::Replace(index) | Caret::Visual(_, index) => Caret::Index(
+                UsizeMax::new(index.value, index.get_maximum().saturating_add(1)),
+            ),
         };
 
         self.view.status_view.set_body(&format!(
@@ -141,11 +141,13 @@ impl Controller {
 
     pub fn change_to_replace_mode(&mut self) {
         self.model.caret = match self.model.caret {
-            Index(index) => Replace(UsizeMax::new(
+            Caret::Index(index) => Caret::Replace(UsizeMax::new(
                 index.value,
                 index.get_maximum().saturating_sub(1),
             )),
-            Offset(index) | Replace(index) | Visual(_, index) => Replace(index),
+            Caret::Offset(index) | Caret::Replace(index) | Caret::Visual(_, index) => {
+                Caret::Replace(index)
+            }
         };
 
         self.view.status_view.set_body(&format!(
@@ -162,12 +164,12 @@ impl Controller {
 
     pub fn change_to_visual_mode(&mut self) {
         self.model.caret = match self.model.caret {
-            Index(index) => Visual(
+            Caret::Index(index) => Caret::Visual(
                 UsizeMax::new(index.value, index.get_maximum().saturating_sub(1)),
                 UsizeMax::new(index.value, index.get_maximum().saturating_sub(1)),
             ),
-            Offset(index) | Replace(index) => Visual(index, index),
-            Visual(start, begin) => Visual(start, begin),
+            Caret::Offset(index) | Caret::Replace(index) => Caret::Visual(index, index),
+            Caret::Visual(start, begin) => Caret::Visual(start, begin),
         };
 
         self.view.status_view.set_body(&format!(

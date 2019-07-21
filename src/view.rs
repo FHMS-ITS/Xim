@@ -1,4 +1,9 @@
-use crate::{align, align_top, model::Model, move_window, Ascii, Caret, RawStdout};
+use crate::{
+    model::{Caret, Model},
+    utils::move_window,
+    utils::{align, align_top},
+    Ascii, RawStdout,
+};
 
 use std::{
     cmp::{max, min},
