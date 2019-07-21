@@ -1,14 +1,13 @@
 use crate::{
     model::{Caret, Model},
+    utils::{read_from_clipboard, save_to_clipboard},
     view::*,
     vim::*,
     UsizeMax,
 };
 
-use std::cmp::min;
 use std::mem::swap;
 
-use clipboard::{ClipboardContext, ClipboardProvider};
 use termion::{self, event::Key};
 
 pub struct Controller {
@@ -17,33 +16,6 @@ pub struct Controller {
     pub view: View,
     mode: InputMode,
     yank: Option<Vec<u8>>,
-}
-
-fn save_to_clipboard(data: &[u8]) -> Result<String, String> {
-    let cb: Result<ClipboardContext, _> = ClipboardProvider::new().map_err(|e| format!("{}", e));
-    let mut cb = cb?;
-
-    match cb.set_contents(hex::encode(data)) {
-        Ok(_) => match data.len() {
-            0 => Err("No data to copy".into()),
-            1 => Ok(format!("Copied to clipboard ({})", hex::encode(&data[..1]))),
-            _ => Ok(format!(
-                "Copied to clipboard ({}...)",
-                hex::encode(&data[..min(data.len(), 3)])
-            )),
-        },
-        Err(e) => Err(format!("Failed copy to clipboard ({})", e)),
-    }
-}
-
-fn read_from_clipboard() -> Result<Vec<u8>, String> {
-    let cb: Result<ClipboardContext, _> = ClipboardProvider::new().map_err(|e| format!("{}", e));
-    let mut cb = cb?;
-
-    let data = cb.get_contents().map_err(|e| format!("{}", e))?;
-    let data: String = data.chars().filter(|c| !c.is_whitespace()).collect();
-
-    hex::decode(&data).map_err(|e| format!("{}", e))
 }
 
 impl Controller {

@@ -1,3 +1,7 @@
+use std::cmp::min;
+
+use clipboard::{ClipboardContext, ClipboardProvider};
+
 pub fn move_window(start: usize, height: usize, new_index: usize) -> Option<usize> {
     if height == 0 {
         return None;
@@ -28,6 +32,33 @@ pub fn align_top(value: u16, boundary: u16) -> u16 {
     } else {
         align(value, boundary) + (boundary - 1)
     }
+}
+
+pub fn save_to_clipboard(data: &[u8]) -> Result<String, String> {
+    let cb: Result<ClipboardContext, _> = ClipboardProvider::new().map_err(|e| format!("{}", e));
+    let mut cb = cb?;
+
+    match cb.set_contents(hex::encode(data)) {
+        Ok(_) => match data.len() {
+            0 => Err("No data to copy".into()),
+            1 => Ok(format!("Copied to clipboard ({})", hex::encode(&data[..1]))),
+            _ => Ok(format!(
+                "Copied to clipboard ({}...)",
+                hex::encode(&data[..min(data.len(), 3)])
+            )),
+        },
+        Err(e) => Err(format!("Failed copy to clipboard ({})", e)),
+    }
+}
+
+pub fn read_from_clipboard() -> Result<Vec<u8>, String> {
+    let cb: Result<ClipboardContext, _> = ClipboardProvider::new().map_err(|e| format!("{}", e));
+    let mut cb = cb?;
+
+    let data = cb.get_contents().map_err(|e| format!("{}", e))?;
+    let data: String = data.chars().filter(|c| !c.is_whitespace()).collect();
+
+    hex::decode(&data).map_err(|e| format!("{}", e))
 }
 
 #[cfg(test)]
