@@ -1,10 +1,14 @@
-use super::{Caret, UsizeMax};
-use super::Caret::*;
+use crate::{
+    Caret::{self, *},
+    history::History,
+    UsizeMax
+};
 
-use std::fs::{File, OpenOptions};
-use std::io::{Read, Write, Result as IoResult};
-use std::mem::swap;
-use history::History;
+use std::{
+    fs::{File, OpenOptions},
+    io::{Read, Write, Result as IoResult},
+    mem::swap
+};
 
 #[derive(Debug)]
 pub struct Model {
@@ -155,15 +159,13 @@ impl Model {
 
         Ok(())
     }
-
-    pub fn set_term_size(&mut self, new_term_size: (u16, u16)) {
-        self.term_size = new_term_size;
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use quickcheck::quickcheck;
 
     quickcheck!{
         fn test_edit(buffer: Vec<u8>, start: usize, end: usize, new: Vec<u8>) -> bool {
@@ -178,7 +180,7 @@ mod tests {
             };
 
             if start <= buffer.len() && end <= buffer.len() && start <= end {
-                model.edit(start, end,  &new);
+                model.edit(start, end,  &new).unwrap();
                 buffer.splice(start..end, new.iter().cloned());
                 buffer == model.buffer
             } else {

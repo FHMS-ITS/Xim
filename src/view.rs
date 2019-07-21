@@ -1,16 +1,17 @@
-use super::{Ascii, align, align_top, Caret, move_window};
-use super::model::Model;
+use crate::{Ascii, align, align_top, Caret, move_window, model::Model, RawStdout};
 
-use std::cmp::{min, max};
-use std::io::{Write, Result as IoResult};
-use std::mem::swap;
+use std::{
+    cmp::{min, max},
+    io::{Write, Result as IoResult},
+    mem::swap
+};
 
-use termion::clear::{All as ClearAll, CurrentLine as ClearCurrentLine};
-use termion::color::{Fg, Red, Reset as ColorReset};
-use termion::cursor::Goto;
-use termion::style::{Bold, Invert, NoInvert, Underline, Reset as StyleReset};
-
-use super::RawStdout;
+use termion::{
+    clear::{All as ClearAll, CurrentLine as ClearCurrentLine},
+    color::{Fg, Red, Reset as ColorReset},
+    cursor::Goto,
+    style::{Bold, Invert, NoInvert, Underline, Reset as StyleReset},
+};
 
 fn chunks_indices(mut start: u16, end: u16, size: u16) -> Vec<(u16, u16)> {
     let mut result = Vec::with_capacity(((end - start) / 16) as usize);

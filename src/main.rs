@@ -1,11 +1,9 @@
-extern crate xim;
-extern crate docopt;
-#[macro_use]
-extern crate serde_derive;
+use xim::{App, Config};
+
+use std::error::Error;
 
 use docopt::Docopt;
-use std::error::Error;
-use xim::{App, Config};
+use serde_derive::Deserialize;
 
 const USAGE: &str = "
 Xim
@@ -28,7 +26,7 @@ struct Args {
     arg_file: String,
 }
 
-// How to translate main::Args to a xim::Config?
+// Translation of main::Args to a xim::Config
 impl From<Args> for Config {
     fn from(args: Args) -> Self {
         Config {

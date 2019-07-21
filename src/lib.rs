@@ -1,36 +1,33 @@
-extern crate chan;
-extern crate chan_signal;
-extern crate clipboard;
-extern crate hex;
-extern crate termion;
+use std::{
+    cell::RefCell,
+    cmp::min,
+    error::Error,
+    io::{Write, Stdout, stdout, stdin},
+    ops::{Add, AddAssign, Drop, Sub, SubAssign, Rem, RemAssign},
+    rc::Rc,
+    sync::mpsc::sync_channel,
+    thread,
+};
 
 use chan_signal::{Signal, notify};
-use termion::event::Key;
-use termion::input::TermRead;
-use termion::raw::{RawTerminal, IntoRawMode};
-use termion::screen::AlternateScreen;
-use std::cell::RefCell;
-use std::error::Error;
-use std::io::{Write, Stdout, stdout, stdin};
-use std::sync::mpsc::sync_channel;
-use std::thread;
-use std::rc::Rc;
-use std::cmp::min;
-use std::ops::{Add, AddAssign, Drop, Sub, SubAssign, Rem, RemAssign};
-
-#[cfg(test)]
-#[macro_use]
-extern crate quickcheck;
+use termion::{
+    event::Key,
+    input::TermRead,
+    raw::{IntoRawMode, RawTerminal},
+    screen::AlternateScreen,
+};
 
 mod controller;
-pub mod model;
+mod model;
 mod view;
 mod history;
 mod vim;
 
-use controller::Controller;
-use view::View;
-use model::Model;
+use {
+    controller::Controller,
+    model::Model,
+    view::View
+};
 
 pub type RawStdout = Rc<RefCell<AlternateScreen<RawTerminal<Stdout>>>>;
 
@@ -170,29 +167,6 @@ impl Ascii for u8 {
             self as char
         } else {
             '.'
-        }
-    }
-}
-
-pub trait Hex {
-    fn is_hex(self: Self) -> bool;
-    fn to_hex(self: Self) -> Option<u8>;
-}
-
-impl Hex for char {
-    fn is_hex(self: char) -> bool {
-        match self {
-            '0'...'9' | 'a'...'f' | 'A'...'F' => true,
-            _ => false
-        }
-    }
-
-    fn to_hex(self: char) -> Option<u8> {
-        match self {
-            '0'...'9' => Some(self as u8 - b'0'),
-            'a'...'f' => Some(self as u8 - b'a' + 10),
-            'A'...'F' => Some(self as u8 - b'A' + 10),
-            _ => None
         }
     }
 }
@@ -343,6 +317,8 @@ pub enum Caret {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use quickcheck::quickcheck;
 
     quickcheck!{
         fn test_align(index: u16, random: u16, boundary: u16) -> bool {

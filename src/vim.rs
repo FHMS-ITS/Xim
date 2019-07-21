@@ -1,29 +1,8 @@
 use termion::event::Key::{self, Char, Backspace};
 
-fn is_binary(c: char) -> bool {
-    match c {
-        '0'...'1' => true,
-        _ => false
-    }
-}
-
-fn is_hex(c: char) -> bool {
-    match c {
-        '0'...'9' |
-        'a'...'f' |
-        'A'...'F' => true,
-        _ => false
-    }
-}
-
-// TODO: use std::ascii::AsciiExt when stable
-fn is_printable(c: char) -> bool {
-    c as u8 >= 32 && c as u8 <= 126
-}
-
 #[derive(Copy, Clone, Debug)]
 pub enum InputMode {
-    Binary,
+    //Binary,
     Hex,
     Ascii,
 }
@@ -50,9 +29,9 @@ impl InputStateMachine {
 
     pub fn valid_input(&self, c: char) -> bool {
         match self.mode {
-            InputMode::Binary => is_binary(c),
-            InputMode::Hex => is_hex(c),
-            InputMode::Ascii => is_printable(c),
+            //InputMode::Binary => is_binary(c),
+            InputMode::Hex => c.is_ascii_hexdigit(),
+            InputMode::Ascii => c.is_ascii_graphic(),
         }
     }
 
@@ -74,14 +53,14 @@ impl InputStateMachine {
                     Char(x) if self.valid_input(x) => {
                         vec.push(x);
                         match self.mode {
-                            InputMode::Binary => {
+                            /*InputMode::Binary => {
                                 if vec.len() == 8 {
                                     // Safe-from-panic: This will never panic, because invalid characters can't be inserted
                                     InputState::Done(u8::from_str_radix(&vec, 2).unwrap())
                                 } else {
                                     InputState::Incomplete(vec)
                                 }
-                            }
+                            }*/
                             InputMode::Hex => {
                                 if vec.len() == 2 {
                                     // Safe-from-panic: This will never panic, because invalid characters can't be inserted

@@ -1,16 +1,16 @@
-use super::view::*;
-use super::model::*;
-use super::Caret;
-use super::Caret::*;
-use super::UsizeMax;
+use crate::{
+    Caret::{self, *},
+    model::*,
+    UsizeMax,
+    view::*,
+    vim::*,
+};
 
-use super::vim::{VimState, VimCommand, InputStateMachine, InputMode, InputState};
-
-use std::mem::swap;
-use clipboard::{ClipboardProvider, ClipboardContext};
 use std::cmp::min;
-use termion;
-use termion::event::Key;
+use std::mem::swap;
+
+use clipboard::{ClipboardProvider, ClipboardContext};
+use termion::{self, event::Key};
 
 pub struct Controller {
     pub state: VimState,
@@ -289,7 +289,7 @@ impl Controller {
                             self.view.status_view.set_body(&format!("{}-- Normal (Hex) --{}", termion::style::Bold, termion::style::Reset)); // TODO
                             InputMode::Hex
                         }
-                        InputMode::Binary => unimplemented!(),
+                        //InputMode::Binary => unimplemented!(),
                     };
                     VimState::Normal
                 }
@@ -426,7 +426,7 @@ impl Controller {
                                     self.view.status_view.set_body(&format!("{}-- Insert (Hex) --{}", termion::style::Bold, termion::style::Reset)); // TODO
                                     InputMode::Hex
                                 }
-                                InputMode::Binary => unimplemented!(),
+                                //InputMode::Binary => unimplemented!(),
                             };
                             VimState::Insert(InputStateMachine::new(self.mode))
                         }
@@ -513,7 +513,7 @@ impl Controller {
                                     self.view.status_view.set_body(&format!("{}-- Replace (Hex) --{}", termion::style::Bold, termion::style::Reset)); // TODO
                                     InputMode::Hex
                                 }
-                                InputMode::Binary => unimplemented!(),
+                                //InputMode::Binary => unimplemented!(),
                             };
                             VimState::Replace(InputStateMachine::new(self.mode), many)
                         }
