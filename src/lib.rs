@@ -360,6 +360,7 @@ mod tests {
                     new_start <= index && index <= new_start + height
                 }
             } else {
+                // If move_window returned None, the height must have been 0
                 height == 0
             }
         }
