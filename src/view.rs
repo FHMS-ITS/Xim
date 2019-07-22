@@ -1,7 +1,6 @@
 use crate::{
     model::{Caret, Model},
-    utils::move_window,
-    utils::{align, align_top},
+    utils::{align, align_top, move_window, offset_width},
     Ascii, RawStdout,
 };
 
@@ -146,7 +145,7 @@ impl HexView {
     pub fn draw(&self, model: &Model) -> IoResult<()> {
         let mut stdout = self.stdout.borrow_mut();
 
-        let offset_width = format!("{:x}", model.buffer.len()).len();
+        let offset_width = offset_width(model.buffer.len());
 
         let DrawArea {
             origin: (x, y),
@@ -183,7 +182,7 @@ impl HexView {
         write!(
             stdout,
             "{}{}",
-            Goto(offset_width as u16 + 4, 1),
+            Goto(offset_width + 4, 1),
             "0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f"
         )?;
         write!(stdout, "{}", Fg(ColorReset))?;
@@ -204,7 +203,7 @@ impl HexView {
                 Fg(Red),
                 offset + self.scroll_start,
                 Fg(ColorReset),
-                width = offset_width
+                width = offset_width as usize
             )
             .unwrap();
 

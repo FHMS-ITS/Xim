@@ -61,6 +61,10 @@ pub fn read_from_clipboard() -> Result<Vec<u8>, String> {
     hex::decode(&data).map_err(|e| format!("{}", e))
 }
 
+pub fn offset_width(max: usize) -> u16 {
+    format!("{:x}", max).len() as u16
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
