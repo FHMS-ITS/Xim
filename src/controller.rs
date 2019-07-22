@@ -5,10 +5,29 @@ use crate::{
     vim::*,
     UsizeMax,
 };
-
 use std::mem::swap;
-
 use termion::{self, event::Key};
+
+#[derive(Clone, Debug)]
+pub enum Msg {
+    Move(Direction),
+    Quit,
+    QuitWithoutSaving,
+    Save,
+    SaveAs(String),
+    SaveAndQuit,
+}
+
+#[derive(Clone, Debug)]
+pub enum Direction {
+    //Left,
+    //Right,
+    //Up,
+    //Down,
+    //Start,
+    Offset(usize),
+    //End,
+}
 
 pub struct Controller {
     pub state: VimState,
@@ -260,6 +279,43 @@ impl Controller {
             // Try to report this on stderr and ignore further failures.
             eprintln!("{}", error);
         }
+    }
+
+    // Update
+
+    fn update(&mut self, msg: Msg) -> bool {
+        let mut run = true;
+        match msg {
+            Msg::Quit => {
+                if self.model.is_modified() {
+                    self.view
+                        .status_view
+                        .set_body("save your changes with :w or force quit with :q!");
+                } else {
+                    run = false;
+                }
+            }
+            Msg::QuitWithoutSaving => {
+                run = false;
+            }
+            Msg::Save => {
+                self.save();
+            }
+            Msg::SaveAs(path) => {
+                self.save_as(path);
+            }
+            Msg::SaveAndQuit => {
+                if self.save() {
+                    run = false;
+                }
+            }
+            Msg::Move(Direction::Offset(offset)) => {
+                self.set_index(offset);
+                self.view.status_view.set_body("");
+            }
+        };
+
+        run
     }
 
     // Transitions
@@ -644,39 +700,9 @@ impl Controller {
             },
             VimState::Command(mut cmd) => match key {
                 Char('\n') => {
-                    match VimCommand::parse(&cmd) {
-                        Ok(cmd) => match cmd {
-                            VimCommand::Quit => {
-                                if self.model.is_modified() {
-                                    self.view.status_view.set_body(
-                                        "save your changes with :w or force quit with :q!",
-                                    );
-                                } else {
-                                    run = false;
-                                }
-                            }
-                            VimCommand::QuitWithoutSaving => {
-                                run = false;
-                            }
-                            VimCommand::Save => {
-                                self.save();
-                            }
-                            VimCommand::SaveAs(path) => {
-                                self.save_as(path);
-                            }
-                            VimCommand::SaveAndQuit => {
-                                if self.save() {
-                                    run = false;
-                                }
-                            }
-                            VimCommand::Jump(offset) => {
-                                self.set_index(offset);
-                                self.view.status_view.set_body("");
-                            }
-                        },
-                        Err(msg) => {
-                            self.view.status_view.set_body(msg);
-                        }
+                    match Msg::parse(&cmd) {
+                        Ok(cmd) => run = self.update(cmd),
+                        Err(msg) => self.view.status_view.set_body(msg),
                     }
                     VimState::Normal
                 }
@@ -699,5 +725,44 @@ impl Controller {
         };
 
         run
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quickcheck::{quickcheck, Arbitrary, Gen};
+    use std::{cell::RefCell, io::stdout, rc::Rc};
+    use termion::{raw::IntoRawMode, screen::AlternateScreen};
+
+    impl Arbitrary for Msg {
+        fn arbitrary<G: Gen>(g: &mut G) -> Self {
+            match g.next_u32() % 2 {
+                0 => Msg::Move(Direction::arbitrary(g)),
+                1 => Msg::QuitWithoutSaving,
+                _ => panic!(),
+            }
+        }
+    }
+
+    impl Arbitrary for Direction {
+        fn arbitrary<G: Gen>(g: &mut G) -> Self {
+            Direction::Offset(usize::arbitrary(g))
+        }
+    }
+
+    quickcheck! {
+        fn test_update(msgs: Vec<Msg>) -> bool {
+            let stdout = Rc::new(RefCell::new(AlternateScreen::from(
+                stdout().into_raw_mode().unwrap(),
+            )));
+
+            let mut ctrl = Controller::new(Model::new(), View::new(stdout));
+
+            for msg in msgs {
+                ctrl.update(msg);
+            }
+            true
+        }
     }
 }

@@ -1,3 +1,5 @@
+use crate::controller::{Direction, Msg};
+
 use termion::event::Key::{self, Backspace, Char};
 
 #[derive(Copy, Clone, Debug)]
@@ -96,19 +98,9 @@ pub enum VimState {
     Command(String),
 }
 
-// TODO: Merge with planned refactoring with Command-Pattern?
-pub enum VimCommand {
-    Quit,
-    QuitWithoutSaving,
-    Save,
-    SaveAs(String),
-    SaveAndQuit,
-    Jump(usize),
-}
-
-impl VimCommand {
-    pub fn parse(cmd: &str) -> Result<VimCommand, &'static str> {
-        use self::VimCommand::*;
+impl Msg {
+    pub fn parse(cmd: &str) -> Result<Msg, &'static str> {
+        use self::Msg::*;
 
         if cmd.starts_with("w ") {
             return Ok(SaveAs(cmd[2..].trim().into()));
@@ -134,7 +126,7 @@ impl VimCommand {
 
                 // ...and error out if no valid offset. (Proper parsing may be implemented in the future.)
                 if let Ok(offset) = usize::from_str_radix(&offset[skip..], base) {
-                    Ok(Jump(offset))
+                    Ok(Move(Direction::Offset(offset)))
                 } else {
                     Err("no such command")
                 }
