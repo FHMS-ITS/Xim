@@ -5,6 +5,7 @@ use crate::{
     vim::*,
     UsizeMax,
 };
+use std::convert::TryFrom;
 use std::mem::swap;
 use termion::{self, event::Key};
 
@@ -20,13 +21,28 @@ pub enum Msg {
 
 #[derive(Clone, Debug)]
 pub enum Direction {
-    //Left,
-    //Right,
-    //Up,
-    //Down,
+    Left,
+    Right,
+    Up,
+    Down,
     //Start,
     Offset(usize),
     //End,
+}
+
+impl TryFrom<Key> for Direction {
+    type Error = String;
+
+    fn try_from(value: Key) -> Result<Self, Self::Error> {
+        use Key::*;
+        match value {
+            Left | Char('h') => Ok(Direction::Left),
+            Right | Char('l') => Ok(Direction::Right),
+            Up | Char('k') => Ok(Direction::Up),
+            Down | Char('j') => Ok(Direction::Down),
+            _ => Err(format!("Key {:?} can't be converted to a Direction", value)),
+        }
+    }
 }
 
 pub struct Controller {
@@ -170,21 +186,6 @@ impl Controller {
         ));
     }
 
-    pub fn make_move(&mut self, direction: termion::event::Key) {
-        use termion::event::Key::{Char, Down, Left, Right, Up};
-
-        match direction {
-            Left | Char('h') => self.model.dec_index(1),
-            Right | Char('l') => self.model.inc_index(1),
-            Up | Char('k') => self.model.dec_index(16),
-            Down | Char('j') => self.model.inc_index(16),
-            _ => panic!("make_move called with non-move key"),
-        };
-
-        self.view.hex_view.scroll_to(self.model.get_index());
-        self.view.status_view.set_index(self.model.get_index());
-    }
-
     // Index
 
     pub fn set_index(&mut self, offset: usize) {
@@ -309,9 +310,20 @@ impl Controller {
                     run = false;
                 }
             }
-            Msg::Move(Direction::Offset(offset)) => {
-                self.set_index(offset);
-                self.view.status_view.set_body("");
+            Msg::Move(dir) => {
+                match dir {
+                    Direction::Left => self.model.dec_index(1),
+                    Direction::Right => self.model.inc_index(1),
+                    Direction::Up => self.model.dec_index(16),
+                    Direction::Down => self.model.inc_index(16),
+                    Direction::Offset(offset) => {
+                        self.set_index(offset);
+                        self.view.status_view.set_body("");
+                    }
+                };
+
+                self.view.hex_view.scroll_to(self.model.get_index());
+                self.view.status_view.set_index(self.model.get_index());
             }
         };
 
@@ -334,11 +346,11 @@ impl Controller {
         self.state = match self.state.clone() {
             VimState::Normal => match key {
                 Left | Right | Up | Down | Char('h') | Char('l') | Char('k') | Char('j') => {
-                    self.make_move(key);
+                    self.update(Msg::Move(Direction::try_from(key).unwrap()));
                     VimState::Normal
                 }
                 Backspace => {
-                    self.make_move(Left);
+                    self.update(Msg::Move(Direction::Left));
                     VimState::Normal
                 }
                 Char('\t') => {
@@ -357,7 +369,7 @@ impl Controller {
                 }
                 Char('a') => {
                     self.change_to_insert_mode();
-                    self.make_move(Right);
+                    self.update(Msg::Move(Direction::Right));
                     VimState::Insert(InputStateMachine::new(self.mode))
                 }
                 Char('i') => {
@@ -390,7 +402,7 @@ impl Controller {
                     VimState::Command(String::new())
                 }
                 Char('\n') => {
-                    self.make_move(Down);
+                    self.update(Msg::Move(Direction::Down));
                     self.set_index_aligned();
                     VimState::Normal
                 }
@@ -424,7 +436,7 @@ impl Controller {
                     if let Some(value) = self.yank.clone() {
                         let index = self.model.get_index();
                         self.paste(index, &value);
-                        self.make_move(Left);
+                        self.update(Msg::Move(Direction::Left));
                         self.model.snapshot();
                     } else {
                         //
@@ -455,7 +467,7 @@ impl Controller {
                 if machine.initial() {
                     match key {
                         Left | Right | Up | Down => {
-                            self.make_move(key);
+                            self.update(Msg::Move(Direction::try_from(key).unwrap()));
                             VimState::Insert(machine)
                         }
                         Backspace => {
@@ -545,11 +557,11 @@ impl Controller {
                         | Char('j')
                             if many =>
                         {
-                            self.make_move(key);
+                            self.update(Msg::Move(Direction::try_from(key).unwrap()));
                             VimState::Replace(machine, many)
                         }
                         Backspace => {
-                            self.make_move(Left);
+                            self.update(Msg::Move(Direction::Left));
                             VimState::Replace(machine, many)
                         }
                         Char(c) if machine.valid_input(c) => {
@@ -559,7 +571,7 @@ impl Controller {
                                     self.replace(byte);
                                     self.model.snapshot();
                                     if many {
-                                        self.make_move(Right);
+                                        self.update(Msg::Move(Direction::Right));
                                         VimState::Replace(InputStateMachine::new(self.mode), many)
                                     } else {
                                         self.change_to_normal_mode();
@@ -598,7 +610,7 @@ impl Controller {
                                     self.replace(byte);
                                     self.model.snapshot();
                                     if many {
-                                        self.make_move(Right);
+                                        self.update(Msg::Move(Direction::Right));
                                         VimState::Replace(InputStateMachine::new(self.mode), many)
                                     } else {
                                         self.change_to_normal_mode();
@@ -618,7 +630,7 @@ impl Controller {
             }
             VimState::Visual => match key {
                 Left | Right | Up | Down | Char('h') | Char('l') | Char('k') | Char('j') => {
-                    self.make_move(key);
+                    self.update(Msg::Move(Direction::try_from(key).unwrap()));
                     self.view.hex_view.scroll_to(self.model.get_index());
                     VimState::Visual
                 }
@@ -747,7 +759,14 @@ mod tests {
 
     impl Arbitrary for Direction {
         fn arbitrary<G: Gen>(g: &mut G) -> Self {
-            Direction::Offset(usize::arbitrary(g))
+            match g.next_u32() % 5 {
+                0 => Direction::Left,
+                1 => Direction::Right,
+                2 => Direction::Up,
+                3 => Direction::Down,
+                4 => Direction::Offset(usize::arbitrary(g)),
+                _ => panic!(),
+            }
         }
     }
 
