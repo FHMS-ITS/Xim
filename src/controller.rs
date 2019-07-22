@@ -17,6 +17,7 @@ pub enum Msg {
     Save,
     SaveAs(String),
     SaveAndQuit,
+    Switch(Option<InputMode>),
 }
 
 #[derive(Clone, Debug)]
@@ -287,6 +288,21 @@ impl Controller {
     fn update(&mut self, msg: Msg) -> bool {
         let mut run = true;
         match msg {
+            Msg::Move(dir) => {
+                match dir {
+                    Direction::Left => self.model.dec_index(1),
+                    Direction::Right => self.model.inc_index(1),
+                    Direction::Up => self.model.dec_index(16),
+                    Direction::Down => self.model.inc_index(16),
+                    Direction::Offset(offset) => {
+                        self.set_index(offset);
+                        self.view.status_view.set_body("");
+                    }
+                };
+
+                self.view.hex_view.scroll_to(self.model.get_index());
+                self.view.status_view.set_index(self.model.get_index());
+            }
             Msg::Quit => {
                 if self.model.is_modified() {
                     self.view
@@ -310,20 +326,23 @@ impl Controller {
                     run = false;
                 }
             }
-            Msg::Move(dir) => {
-                match dir {
-                    Direction::Left => self.model.dec_index(1),
-                    Direction::Right => self.model.inc_index(1),
-                    Direction::Up => self.model.dec_index(16),
-                    Direction::Down => self.model.inc_index(16),
-                    Direction::Offset(offset) => {
-                        self.set_index(offset);
-                        self.view.status_view.set_body("");
-                    }
-                };
-
-                self.view.hex_view.scroll_to(self.model.get_index());
-                self.view.status_view.set_index(self.model.get_index());
+            Msg::Switch(mode) => {
+                match mode {
+                    Some(InputMode::Ascii) => unimplemented!(),
+                    Some(InputMode::Hex) => unimplemented!(),
+                    None => {
+                        self.mode = match self.mode {
+                            InputMode::Hex => {
+                                self.view.status_view.set_body(&format!("{}-- Normal (Ascii) --{}", termion::style::Bold, termion::style::Reset)); // TODO
+                                InputMode::Ascii
+                            }
+                            InputMode::Ascii => {
+                                self.view.status_view.set_body(&format!("{}-- Normal (Hex) --{}", termion::style::Bold, termion::style::Reset)); // TODO
+                                InputMode::Hex
+                            }
+                        };
+                    },
+                }
             }
         };
 
@@ -354,17 +373,7 @@ impl Controller {
                     VimState::Normal
                 }
                 Char('\t') => {
-                    self.mode = match self.mode {
-                        InputMode::Hex => {
-                            self.view.status_view.set_body(&format!("{}-- Normal (Ascii) --{}", termion::style::Bold, termion::style::Reset)); // TODO
-                            InputMode::Ascii
-                        }
-                        InputMode::Ascii => {
-                            self.view.status_view.set_body(&format!("{}-- Normal (Hex) --{}", termion::style::Bold, termion::style::Reset)); // TODO
-                            InputMode::Hex
-                        }
-                        //InputMode::Binary => unimplemented!(),
-                    };
+                    self.update(Msg::Switch(None));
                     VimState::Normal
                 }
                 Char('a') => {
@@ -496,17 +505,7 @@ impl Controller {
                             }
                         }
                         Char('\t') => {
-                            self.mode = match self.mode {
-                                InputMode::Hex => {
-                                    self.view.status_view.set_body(&format!("{}-- Insert (Ascii) --{}", termion::style::Bold, termion::style::Reset)); // TODO
-                                    InputMode::Ascii
-                                }
-                                InputMode::Ascii => {
-                                    self.view.status_view.set_body(&format!("{}-- Insert (Hex) --{}", termion::style::Bold, termion::style::Reset)); // TODO
-                                    InputMode::Hex
-                                }
-                                //InputMode::Binary => unimplemented!(),
-                            };
+                            self.update(Msg::Switch(None));
                             VimState::Insert(InputStateMachine::new(self.mode))
                         }
                         Ctrl('v') => {
@@ -582,17 +581,7 @@ impl Controller {
                             }
                         }
                         Char('\t') => {
-                            self.mode = match self.mode {
-                                InputMode::Hex => {
-                                    self.view.status_view.set_body(&format!("{}-- Replace (Ascii) --{}", termion::style::Bold, termion::style::Reset)); // TODO
-                                    InputMode::Ascii
-                                }
-                                InputMode::Ascii => {
-                                    self.view.status_view.set_body(&format!("{}-- Replace (Hex) --{}", termion::style::Bold, termion::style::Reset)); // TODO
-                                    InputMode::Hex
-                                }
-                                //InputMode::Binary => unimplemented!(),
-                            };
+                            self.update(Msg::Switch(None));
                             VimState::Replace(InputStateMachine::new(self.mode), many)
                         }
                         Esc => {
@@ -746,12 +735,15 @@ mod tests {
     use quickcheck::{quickcheck, Arbitrary, Gen};
     use std::{cell::RefCell, io::stdout, rc::Rc};
     use termion::{raw::IntoRawMode, screen::AlternateScreen};
+    use crate::controller::Msg::Switch;
 
     impl Arbitrary for Msg {
         fn arbitrary<G: Gen>(g: &mut G) -> Self {
-            match g.next_u32() % 2 {
+            match g.next_u32() % 4 {
                 0 => Msg::Move(Direction::arbitrary(g)),
                 1 => Msg::QuitWithoutSaving,
+                2 => Switch(Some(InputMode::arbitrary(g))),
+                3 => Switch(None),
                 _ => panic!(),
             }
         }
@@ -765,6 +757,16 @@ mod tests {
                 2 => Direction::Up,
                 3 => Direction::Down,
                 4 => Direction::Offset(usize::arbitrary(g)),
+                _ => panic!(),
+            }
+        }
+    }
+
+    impl Arbitrary for InputMode {
+        fn arbitrary<G: Gen>(g: &mut G) -> Self {
+            match g.next_u32() % 2 {
+                0 => InputMode::Ascii,
+                1 => InputMode::Hex,
                 _ => panic!(),
             }
         }
