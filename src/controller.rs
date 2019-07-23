@@ -35,6 +35,7 @@ pub enum Msg {
     Show(String),
     Redraw,
     Resize((u16, u16)),
+    Open(String),
 }
 
 #[derive(Clone, Debug)]
@@ -546,6 +547,9 @@ impl Controller {
                     origin: (1, 1),
                     dimens: size,
                 });
+            }
+            Msg::Open(path) => {
+                self.open(&path);
             }
         };
 

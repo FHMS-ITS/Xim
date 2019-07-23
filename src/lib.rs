@@ -90,7 +90,7 @@ impl App {
         let mut ctrl = Controller::new(Model::new(), View::new(self.stdout.clone()));
 
         ctrl.update(Msg::Resize(termion::terminal_size()?));
-        ctrl.open(&self.args.file);
+        ctrl.update(Msg::Open(self.args.file.clone()));
         ctrl.update(Msg::Redraw);
 
         for event in events.iter() {
