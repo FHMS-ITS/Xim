@@ -11,6 +11,7 @@ use termion::{self, event::Key};
 
 #[derive(Clone, Debug)]
 pub enum Msg {
+    Byte(u8),
     Move(Direction),
     Quit,
     QuitWithoutSaving,
@@ -18,6 +19,26 @@ pub enum Msg {
     SaveAs(String),
     SaveAndQuit,
     Switch(Option<InputMode>),
+    Delete(Option<Movement>),
+    ToNormal,
+    ToInsert(Option<usize>),
+    ToAppend(Option<usize>),
+    ToReplace,
+    ToVisual,
+    ToCommand,
+    ClipboardCopy,
+    ClipboardPaste,
+    Yank,
+    Paste(Option<Movement>),
+    Undo,
+    Redo,
+    Show(String),
+}
+
+#[derive(Clone, Debug)]
+pub enum Movement {
+    Left,
+    Right,
 }
 
 #[derive(Clone, Debug)]
@@ -29,6 +50,8 @@ pub enum Direction {
     //Start,
     Offset(usize),
     //End,
+    Newline,
+    Revert,
 }
 
 impl TryFrom<Key> for Direction {
@@ -287,7 +310,21 @@ impl Controller {
 
     fn update(&mut self, msg: Msg) -> bool {
         let mut run = true;
+
         match msg {
+            Msg::Byte(byte) => {
+                match self.model.caret {
+                    Caret::Index(_) => {
+                        self.insert(byte);
+                    }
+                    Caret::Replace(_) => {
+                        self.replace(byte);
+                    }
+                    _ => {}
+                }
+
+                self.model.snapshot();
+            }
             Msg::Move(dir) => {
                 match dir {
                     Direction::Left => self.model.dec_index(1),
@@ -297,6 +334,17 @@ impl Controller {
                     Direction::Offset(offset) => {
                         self.set_index(offset);
                         self.view.status_view.set_body("");
+                    }
+                    Direction::Newline => {
+                        self.model.inc_index(16);
+                        self.set_index_aligned();
+                    }
+                    Direction::Revert => {
+                        if let Caret::Visual(ref mut start, ref mut end) = self.model.caret {
+                            swap(start, end);
+                        } else {
+                            return true;
+                        }
                     }
                 };
 
@@ -326,23 +374,199 @@ impl Controller {
                     run = false;
                 }
             }
-            Msg::Switch(mode) => {
-                match mode {
-                    Some(InputMode::Ascii) => unimplemented!(),
-                    Some(InputMode::Hex) => unimplemented!(),
-                    None => {
-                        self.mode = match self.mode {
-                            InputMode::Hex => {
-                                self.view.status_view.set_body(&format!("{}-- Normal (Ascii) --{}", termion::style::Bold, termion::style::Reset)); // TODO
-                                InputMode::Ascii
-                            }
-                            InputMode::Ascii => {
-                                self.view.status_view.set_body(&format!("{}-- Normal (Hex) --{}", termion::style::Bold, termion::style::Reset)); // TODO
-                                InputMode::Hex
-                            }
-                        };
-                    },
+            Msg::Switch(mode) => match mode {
+                Some(InputMode::Ascii) => {
+                    self.mode = InputMode::Ascii;
+                    self.view.status_view.set_body(&format!(
+                        "{}-- Normal (Ascii) --{}",
+                        termion::style::Bold,
+                        termion::style::Reset
+                    ));
                 }
+                Some(InputMode::Hex) => {
+                    self.mode = InputMode::Hex;
+                    self.view.status_view.set_body(&format!(
+                        "{}-- Normal (Hex) --{}",
+                        termion::style::Bold,
+                        termion::style::Reset
+                    ));
+                }
+                None => {
+                    self.mode = match self.mode {
+                        InputMode::Hex => {
+                            self.view.status_view.set_body(&format!(
+                                "{}-- Normal (Ascii) --{}",
+                                termion::style::Bold,
+                                termion::style::Reset
+                            ));
+                            InputMode::Ascii
+                        }
+                        InputMode::Ascii => {
+                            self.view.status_view.set_body(&format!(
+                                "{}-- Normal (Hex) --{}",
+                                termion::style::Bold,
+                                termion::style::Reset
+                            ));
+                            InputMode::Hex
+                        }
+                    };
+                }
+            },
+            Msg::Delete(movement) => {
+                if self.model.buffer.is_empty() {
+                    return true;
+                }
+
+                match movement {
+                    Some(Movement::Left) => {
+                        self.remove_left();
+                        self.model.snapshot();
+                    }
+                    Some(Movement::Right) => {
+                        if let Caret::Offset(_) = self.model.caret {
+                            self.yank = Some(
+                                self.model.buffer
+                                    [self.model.get_index()..self.model.get_index() + 1]
+                                    .to_owned(),
+                            );
+                        }
+                        self.remove_right();
+                        self.model.snapshot();
+                    }
+                    None => {
+                        if let Caret::Visual(start, end) = self.model.caret {
+                            let (start, end) = if usize::from(start) > usize::from(end) {
+                                (end, start)
+                            } else {
+                                (start, end)
+                            };
+
+                            self.yank = Some(
+                                self.model.buffer[start.into()..usize::from(end) + 1].to_owned(),
+                            );
+
+                            if let Err(e) = self.model.edit(start.into(), usize::from(end) + 1, &[])
+                            {
+                                self.view
+                                    .status_view
+                                    .set_body(&format!("could not remove range ({})", e));
+                            } else {
+                                self.model.set_index(start.into());
+                            }
+
+                            self.view.hex_view.scroll_to(self.model.get_index());
+
+                            self.model.snapshot();
+                        }
+                    }
+                }
+            }
+            Msg::ToNormal => {
+                self.change_to_normal_mode();
+            }
+            Msg::ToInsert(_repeat) => {
+                self.change_to_insert_mode();
+            }
+            Msg::ToAppend(_repeat) => {
+                self.change_to_insert_mode();
+                self.update(Msg::Move(Direction::Right));
+            }
+            Msg::ToReplace => {
+                self.change_to_replace_mode();
+            }
+            Msg::ToVisual => {
+                self.change_to_visual_mode();
+            }
+            Msg::ToCommand => {
+                self.change_to_command_mode();
+            }
+            Msg::ClipboardCopy => {
+                if self.model.buffer.is_empty() {
+                    return true;
+                }
+
+                let bytes = match self.model.caret {
+                    Caret::Offset(index) => &self.model.buffer[index.value..index.value + 1],
+                    Caret::Visual(start, end) => {
+                        let (start, end) = if usize::from(start) > usize::from(end) {
+                            (end, start)
+                        } else {
+                            (start, end)
+                        };
+
+                        &self.model.buffer[start.into()..usize::from(end) + 1]
+                    }
+                    _ => return true,
+                };
+
+                match save_to_clipboard(bytes) {
+                    Ok(msg) | Err(msg) => self.view.status_view.set_body(&msg),
+                };
+            }
+            Msg::ClipboardPaste => match read_from_clipboard() {
+                Ok(value) => {
+                    let index = self.model.get_index();
+                    self.paste(index, &value);
+                    self.model.snapshot();
+                }
+                Err(ref e) => {
+                    self.view.status_view.set_body(e);
+                }
+            },
+            Msg::Yank => {
+                if self.model.buffer.is_empty() {
+                    return true;
+                }
+
+                match self.model.caret {
+                    Caret::Offset(index) => {
+                        self.yank = Some(vec![self.model.buffer[index.value]]);
+                    }
+                    Caret::Visual(start, end) => {
+                        let (start, end) = if usize::from(start) > usize::from(end) {
+                            (end, start)
+                        } else {
+                            (start, end)
+                        };
+
+                        self.yank =
+                            Some(self.model.buffer[start.into()..usize::from(end) + 1].to_owned());
+                        self.update(Msg::ToNormal);
+                    }
+                    _ => return true,
+                }
+            }
+            Msg::Paste(movement) => {
+                if let Some(value) = self.yank.clone() {
+                    match movement {
+                        Some(Movement::Left) | None => {
+                            let index = self.model.get_index();
+                            self.paste(index, &value);
+                            self.update(Msg::Move(Direction::Left));
+                            self.model.snapshot();
+                        }
+                        Some(Movement::Right) => {
+                            let index = self.model.get_index() + 1;
+                            self.paste(index, &value);
+                            self.model.snapshot();
+                        }
+                    }
+                }
+            }
+            Msg::Undo => {
+                if !self.model.undo() {
+                    self.view.status_view.set_body("Nothing to undo");
+                }
+                self.view.hex_view.scroll_to(self.model.get_index());
+            }
+            Msg::Redo => {
+                if !self.model.redo() {
+                    self.view.status_view.set_body("Nothing to redo");
+                }
+                self.view.hex_view.scroll_to(self.model.get_index());
+            }
+            Msg::Show(msg) => {
+                self.view.status_view.set_body(&format!("{}", &msg));
             }
         };
 
@@ -377,97 +601,63 @@ impl Controller {
                     VimState::Normal
                 }
                 Char('a') => {
-                    self.change_to_insert_mode();
-                    self.update(Msg::Move(Direction::Right));
+                    self.update(Msg::ToAppend(None));
                     VimState::Insert(InputStateMachine::new(self.mode))
                 }
                 Char('i') => {
-                    self.change_to_insert_mode();
+                    self.update(Msg::ToInsert(None));
                     VimState::Insert(InputStateMachine::new(self.mode))
                 }
                 Delete | Char('x') => {
-                    self.yank = Some(
-                        self.model.buffer[self.model.get_index()..self.model.get_index() + 1]
-                            .to_owned(),
-                    );
-                    self.remove_right();
-                    self.model.snapshot();
+                    self.update(Msg::Delete(Some(Movement::Right)));
                     VimState::Normal
                 }
                 Char('r') => {
-                    self.change_to_replace_mode();
+                    self.update(Msg::ToReplace);
                     VimState::Replace(InputStateMachine::new(self.mode), false)
                 }
                 Char('R') => {
-                    self.change_to_replace_mode();
+                    self.update(Msg::ToReplace);
                     VimState::Replace(InputStateMachine::new(self.mode), true)
                 }
                 Char('v') => {
-                    self.change_to_visual_mode();
+                    self.update(Msg::ToVisual);
                     VimState::Visual
                 }
                 Char(':') => {
-                    self.change_to_command_mode();
+                    self.update(Msg::ToCommand);
                     VimState::Command(String::new())
                 }
                 Char('\n') => {
-                    self.update(Msg::Move(Direction::Down));
-                    self.set_index_aligned();
+                    self.update(Msg::Move(Direction::Newline));
                     VimState::Normal
                 }
                 Ctrl('c') => {
-                    let bytes =
-                        &self.model.buffer[self.model.get_index()..self.model.get_index() + 1];
-                    match save_to_clipboard(bytes) {
-                        Ok(msg) | Err(msg) => self.view.status_view.set_body(&msg),
-                    };
-
+                    self.update(Msg::ClipboardCopy);
                     VimState::Normal
                 }
                 Char('y') => {
-                    self.yank = Some(
-                        self.model.buffer[self.model.get_index()..self.model.get_index() + 1]
-                            .to_owned(),
-                    );
+                    self.update(Msg::Yank);
                     VimState::Normal
                 }
                 Char('p') => {
-                    if let Some(value) = self.yank.clone() {
-                        let index = self.model.get_index() + 1;
-                        self.paste(index, &value);
-                        self.model.snapshot();
-                    } else {
-                        //
-                    }
+                    self.update(Msg::Paste(Some(Movement::Right)));
                     VimState::Normal
                 }
                 Char('P') => {
-                    if let Some(value) = self.yank.clone() {
-                        let index = self.model.get_index();
-                        self.paste(index, &value);
-                        self.update(Msg::Move(Direction::Left));
-                        self.model.snapshot();
-                    } else {
-                        //
-                    }
+                    self.update(Msg::Paste(Some(Movement::Left)));
                     VimState::Normal
                 }
                 Char('u') => {
-                    if !self.model.undo() {
-                        self.view.status_view.set_body("Nothing to undo");
-                    }
-                    self.view.hex_view.scroll_to(self.model.get_index());
+                    self.update(Msg::Undo);
                     VimState::Normal
                 }
                 Ctrl('r') => {
-                    if !self.model.redo() {
-                        self.view.status_view.set_body("Nothing to redo");
-                    }
-                    self.view.hex_view.scroll_to(self.model.get_index());
+                    self.update(Msg::Redo);
                     VimState::Normal
                 }
                 Esc => {
-                    self.change_to_normal_mode();
+                    self.update(Msg::ToNormal);
                     VimState::Normal
                 }
                 _ => VimState::Normal,
@@ -480,25 +670,22 @@ impl Controller {
                             VimState::Insert(machine)
                         }
                         Backspace => {
-                            self.remove_left();
-                            self.model.snapshot();
+                            self.update(Msg::Delete(Some(Movement::Left)));
                             VimState::Insert(machine)
                         }
                         Delete => {
-                            self.remove_right();
-                            self.model.snapshot();
+                            self.update(Msg::Delete(Some(Movement::Right)));
                             VimState::Insert(machine)
                         }
                         Insert => {
-                            self.change_to_replace_mode();
+                            self.update(Msg::ToReplace);
                             VimState::Replace(InputStateMachine::new(self.mode), true)
                         }
                         Char(a) if machine.valid_input(a) => {
                             machine.transition(key);
                             match machine.state.clone() {
                                 InputState::Done(byte) => {
-                                    self.insert(byte);
-                                    self.model.snapshot();
+                                    self.update(Msg::Byte(byte));
                                     VimState::Insert(InputStateMachine::new(self.mode))
                                 }
                                 InputState::Incomplete(_) => VimState::Insert(machine),
@@ -509,21 +696,11 @@ impl Controller {
                             VimState::Insert(InputStateMachine::new(self.mode))
                         }
                         Ctrl('v') => {
-                            match read_from_clipboard() {
-                                Ok(value) => {
-                                    let index = self.model.get_index();
-                                    self.paste(index, &value);
-                                    self.model.snapshot();
-                                }
-                                Err(ref e) => {
-                                    self.view.status_view.set_body(e);
-                                }
-                            }
-
+                            self.update(Msg::ClipboardPaste);
                             VimState::Insert(machine)
                         }
                         Esc => {
-                            self.change_to_normal_mode();
+                            self.update(Msg::ToNormal);
                             VimState::Normal
                         }
                         _ => VimState::Insert(machine),
@@ -534,15 +711,14 @@ impl Controller {
                             machine.transition(key);
                             match machine.state.clone() {
                                 InputState::Done(byte) => {
-                                    self.insert(byte);
-                                    self.model.snapshot();
+                                    self.update(Msg::Byte(byte));
                                     VimState::Insert(InputStateMachine::new(self.mode))
                                 }
                                 InputState::Incomplete(_) => VimState::Insert(machine),
                             }
                         }
                         Esc => {
-                            self.change_to_normal_mode();
+                            self.update(Msg::ToNormal);
                             VimState::Normal
                         }
                         _ => VimState::Insert(machine),
@@ -567,13 +743,12 @@ impl Controller {
                             machine.transition(key);
                             match machine.state.clone() {
                                 InputState::Done(byte) => {
-                                    self.replace(byte);
-                                    self.model.snapshot();
+                                    self.update(Msg::Byte(byte));
                                     if many {
                                         self.update(Msg::Move(Direction::Right));
                                         VimState::Replace(InputStateMachine::new(self.mode), many)
                                     } else {
-                                        self.change_to_normal_mode();
+                                        self.update(Msg::ToNormal);
                                         VimState::Normal
                                     }
                                 }
@@ -585,7 +760,7 @@ impl Controller {
                             VimState::Replace(InputStateMachine::new(self.mode), many)
                         }
                         Esc => {
-                            self.change_to_normal_mode();
+                            self.update(Msg::ToNormal);
                             VimState::Normal
                         }
                         _ => VimState::Replace(machine, many),
@@ -596,13 +771,12 @@ impl Controller {
                             machine.transition(key);
                             match machine.state.clone() {
                                 InputState::Done(byte) => {
-                                    self.replace(byte);
-                                    self.model.snapshot();
+                                    self.update(Msg::Byte(byte));
                                     if many {
                                         self.update(Msg::Move(Direction::Right));
                                         VimState::Replace(InputStateMachine::new(self.mode), many)
                                     } else {
-                                        self.change_to_normal_mode();
+                                        self.update(Msg::ToNormal);
                                         VimState::Normal
                                     }
                                 }
@@ -610,7 +784,7 @@ impl Controller {
                             }
                         }
                         Esc => {
-                            self.change_to_normal_mode();
+                            self.update(Msg::ToNormal);
                             VimState::Normal
                         }
                         _ => VimState::Replace(machine, many),
@@ -620,81 +794,27 @@ impl Controller {
             VimState::Visual => match key {
                 Left | Right | Up | Down | Char('h') | Char('l') | Char('k') | Char('j') => {
                     self.update(Msg::Move(Direction::try_from(key).unwrap()));
-                    self.view.hex_view.scroll_to(self.model.get_index());
                     VimState::Visual
                 }
                 Char('y') => {
-                    if let Caret::Visual(start, end) = self.model.caret {
-                        let (start, end) = if usize::from(start) > usize::from(end) {
-                            (end, start)
-                        } else {
-                            (start, end)
-                        };
-
-                        self.yank =
-                            Some(self.model.buffer[start.into()..usize::from(end) + 1].to_owned());
-                    } else {
-                        unreachable!();
-                    }
-                    self.change_to_normal_mode();
+                    self.update(Msg::Yank);
                     VimState::Normal
                 }
                 Ctrl('c') => {
-                    if let Caret::Visual(start, end) = self.model.caret {
-                        let (start, end) = if usize::from(start) > usize::from(end) {
-                            (end, start)
-                        } else {
-                            (start, end)
-                        };
-
-                        let bytes = &self.model.buffer[start.into()..usize::from(end) + 1];
-                        match save_to_clipboard(bytes) {
-                            Ok(msg) | Err(msg) => self.view.status_view.set_body(&msg),
-                        };
-                    } else {
-                        unreachable!();
-                    }
-
+                    self.update(Msg::ClipboardCopy);
                     VimState::Visual
                 }
                 Char('o') => {
-                    if let Caret::Visual(ref mut start, ref mut end) = self.model.caret {
-                        swap(start, end);
-                    } else {
-                        panic!("wrong caret in visual state");
-                    }
+                    self.update(Msg::Move(Direction::Revert));
                     VimState::Visual
                 }
                 Char('x') | Char('d') => {
-                    if let Caret::Visual(start, end) = self.model.caret {
-                        let (start, end) = if usize::from(start) > usize::from(end) {
-                            (end, start)
-                        } else {
-                            (start, end)
-                        };
-
-                        self.yank =
-                            Some(self.model.buffer[start.into()..usize::from(end) + 1].to_owned());
-
-                        if let Err(e) = self.model.edit(start.into(), usize::from(end) + 1, &[]) {
-                            self.view
-                                .status_view
-                                .set_body(&format!("could not remove range ({})", e));
-                        } else {
-                            self.model.set_index(start.into());
-                        }
-
-                        self.view.hex_view.scroll_to(self.model.get_index());
-
-                        self.model.snapshot();
-                    } else {
-                        unreachable!();
-                    }
-                    self.change_to_normal_mode();
+                    self.update(Msg::Delete(None));
+                    self.update(Msg::ToNormal);
                     VimState::Normal
                 }
                 Esc => {
-                    self.change_to_normal_mode();
+                    self.update(Msg::ToNormal);
                     VimState::Normal
                 }
                 _ => VimState::Visual,
@@ -703,22 +823,24 @@ impl Controller {
                 Char('\n') => {
                     match Msg::parse(&cmd) {
                         Ok(cmd) => run = self.update(cmd),
-                        Err(msg) => self.view.status_view.set_body(msg),
+                        Err(msg) => {
+                            self.update(Msg::Show(format!("{}", &msg)));
+                        }
                     }
                     VimState::Normal
                 }
                 Backspace => {
                     cmd.pop();
-                    self.view.status_view.set_body(&format!(":{}", &cmd));
+                    self.update(Msg::Show(format!(":{}", &cmd)));
                     VimState::Command(cmd)
                 }
                 Char(c) => {
                     cmd.push(c);
-                    self.view.status_view.set_body(&format!(":{}", &cmd));
+                    self.update(Msg::Show(format!(":{}", &cmd)));
                     VimState::Command(cmd)
                 }
                 Esc => {
-                    self.view.status_view.set_body("");
+                    self.update(Msg::Show("".into()));
                     VimState::Normal
                 }
                 _ => VimState::Command(cmd),
@@ -735,15 +857,44 @@ mod tests {
     use quickcheck::{quickcheck, Arbitrary, Gen};
     use std::{cell::RefCell, io::stdout, rc::Rc};
     use termion::{raw::IntoRawMode, screen::AlternateScreen};
-    use crate::controller::Msg::Switch;
 
     impl Arbitrary for Msg {
         fn arbitrary<G: Gen>(g: &mut G) -> Self {
-            match g.next_u32() % 4 {
-                0 => Msg::Move(Direction::arbitrary(g)),
-                1 => Msg::QuitWithoutSaving,
-                2 => Switch(Some(InputMode::arbitrary(g))),
-                3 => Switch(None),
+            use Msg::*;
+            match g.next_u32() % 17 {
+                0 => Byte(u8::arbitrary(g)),
+                1 => Move(Direction::arbitrary(g)),
+                //0 => Quit,
+                //0 => QuitWithoutSaving,
+                //0 => Save,
+                //0 => SaveAs(String),
+                //0 => SaveAndQuit,
+                2 => Switch(Option::<InputMode>::arbitrary(g)),
+                3 => Delete(Option::<Movement>::arbitrary(g)),
+                4 => ToNormal,
+                5 => ToInsert(Option::<usize>::arbitrary(g)),
+                6 => ToAppend(Option::<usize>::arbitrary(g)),
+                7 => ToReplace,
+                8 => ToVisual,
+                9 => ToCommand,
+                10 => ClipboardCopy,
+                11 => ClipboardPaste,
+                12 => Yank,
+                13 => Paste(Option::<Movement>::arbitrary(g)),
+                14 => Undo,
+                15 => Redo,
+                16 => Show(String::arbitrary(g)),
+                _ => panic!(),
+            }
+        }
+    }
+
+    impl Arbitrary for Movement {
+        fn arbitrary<G: Gen>(g: &mut G) -> Self {
+            use Movement::*;
+            match g.next_u32() % 2 {
+                0 => Left,
+                1 => Right,
                 _ => panic!(),
             }
         }
@@ -751,12 +902,17 @@ mod tests {
 
     impl Arbitrary for Direction {
         fn arbitrary<G: Gen>(g: &mut G) -> Self {
-            match g.next_u32() % 5 {
-                0 => Direction::Left,
-                1 => Direction::Right,
-                2 => Direction::Up,
-                3 => Direction::Down,
-                4 => Direction::Offset(usize::arbitrary(g)),
+            use Direction::*;
+            match g.next_u32() % 7 {
+                0 => Left,
+                1 => Right,
+                2 => Up,
+                3 => Down,
+                //Start,
+                4 => Offset(usize::arbitrary(g)),
+                //End,
+                5 => Newline,
+                6 => Revert,
                 _ => panic!(),
             }
         }
@@ -764,9 +920,10 @@ mod tests {
 
     impl Arbitrary for InputMode {
         fn arbitrary<G: Gen>(g: &mut G) -> Self {
+            use InputMode::*;
             match g.next_u32() % 2 {
-                0 => InputMode::Ascii,
-                1 => InputMode::Hex,
+                0 => Ascii,
+                1 => Hex,
                 _ => panic!(),
             }
         }
