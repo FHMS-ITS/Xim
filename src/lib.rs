@@ -24,7 +24,7 @@ mod utils;
 mod view;
 mod vim;
 
-use {controller::Controller, model::Model, view::View};
+use {controller::{Msg, Controller}, model::Model, view::View};
 
 pub type RawStdout = Rc<RefCell<AlternateScreen<RawTerminal<Stdout>>>>;
 
@@ -89,9 +89,9 @@ impl App {
 
         let mut ctrl = Controller::new(Model::new(), View::new(self.stdout.clone()));
 
-        ctrl.resize_view(termion::terminal_size()?);
+        ctrl.update(Msg::Resize(termion::terminal_size()?));
         ctrl.open(&self.args.file);
-        ctrl.update_view();
+        ctrl.update(Msg::Redraw);
 
         for event in events.iter() {
             match event {
@@ -100,11 +100,13 @@ impl App {
                         break;
                     }
                 }
-                Event::Resize(new_size) => ctrl.resize_view(new_size),
+                Event::Resize(new_size) => {
+                    ctrl.update(Msg::Resize(new_size));
+                },
                 Event::Kill => break,
             }
 
-            ctrl.update_view();
+            ctrl.update(Msg::Redraw);
         }
 
         Ok(())

@@ -33,6 +33,8 @@ pub enum Msg {
     Undo,
     Redo,
     Show(String),
+    Redraw,
+    Resize((u16, u16)),
 }
 
 #[derive(Clone, Debug)]
@@ -210,27 +212,6 @@ impl Controller {
         ));
     }
 
-    // Index
-
-    pub fn set_index(&mut self, offset: usize) {
-        self.model.set_index(offset);
-        self.view.hex_view.scroll_to(self.model.get_index());
-
-        let index = match self.model.caret {
-            Caret::Index(index)
-            | Caret::Offset(index)
-            | Caret::Replace(index)
-            | Caret::Visual(_, index) => index,
-        };
-
-        self.view.status_view.set_index(index.into());
-    }
-
-    pub fn set_index_aligned(&mut self) {
-        let index = self.model.get_index();
-        self.model.set_index(index - (index % 16));
-    }
-
     // Editing
 
     pub fn insert(&mut self, value: u8) {
@@ -289,26 +270,9 @@ impl Controller {
         }
     }
 
-    // Views
-
-    pub fn resize_view(&mut self, size: (u16, u16)) {
-        self.view.set_area(DrawArea {
-            origin: (1, 1),
-            dimens: size,
-        });
-    }
-
-    pub fn update_view(&mut self) {
-        if let Err(error) = self.view.draw(&self.model) {
-            // What to do when drawing failed?
-            // Try to report this on stderr and ignore further failures.
-            eprintln!("{}", error);
-        }
-    }
-
     // Update
 
-    fn update(&mut self, msg: Msg) -> bool {
+    pub fn update(&mut self, msg: Msg) -> bool {
         let mut run = true;
 
         match msg {
@@ -332,12 +296,23 @@ impl Controller {
                     Direction::Up => self.model.dec_index(16),
                     Direction::Down => self.model.inc_index(16),
                     Direction::Offset(offset) => {
-                        self.set_index(offset);
+                        self.model.set_index(offset);
+                        self.view.hex_view.scroll_to(self.model.get_index());
+
+                        let index = match self.model.caret {
+                            Caret::Index(index)
+                            | Caret::Offset(index)
+                            | Caret::Replace(index)
+                            | Caret::Visual(_, index) => index,
+                        };
+
+                        self.view.status_view.set_index(index.into());
                         self.view.status_view.set_body("");
                     }
                     Direction::Newline => {
                         self.model.inc_index(16);
-                        self.set_index_aligned();
+                        let index = self.model.get_index();
+                        self.model.set_index(index - (index % 16));
                     }
                     Direction::Revert => {
                         if let Caret::Visual(ref mut start, ref mut end) = self.model.caret {
@@ -567,6 +542,19 @@ impl Controller {
             }
             Msg::Show(msg) => {
                 self.view.status_view.set_body(&format!("{}", &msg));
+            }
+            Msg::Redraw => {
+                if let Err(error) = self.view.draw(&self.model) {
+                    // What to do when drawing failed?
+                    // Try to report this on stderr and ignore further failures.
+                    eprintln!("{}", error);
+                }
+            }
+            Msg::Resize(size) => {
+                self.view.set_area(DrawArea {
+                    origin: (1, 1),
+                    dimens: size,
+                });
             }
         };
 
@@ -861,7 +849,7 @@ mod tests {
     impl Arbitrary for Msg {
         fn arbitrary<G: Gen>(g: &mut G) -> Self {
             use Msg::*;
-            match g.next_u32() % 17 {
+            match g.next_u32() % 19 {
                 0 => Byte(u8::arbitrary(g)),
                 1 => Move(Direction::arbitrary(g)),
                 //0 => Quit,
@@ -884,6 +872,8 @@ mod tests {
                 14 => Undo,
                 15 => Redo,
                 16 => Show(String::arbitrary(g)),
+                17 => Redraw,
+                18 => Resize(<(u16, u16)>::arbitrary(g)),
                 _ => panic!(),
             }
         }
