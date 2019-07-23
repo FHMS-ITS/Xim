@@ -846,6 +846,8 @@ mod tests {
     use std::{cell::RefCell, io::stdout, rc::Rc};
     use termion::{raw::IntoRawMode, screen::AlternateScreen};
 
+    // TODO: `impl Arbitrary`'s are error-prone: new variants are easily missed. Better idea?
+
     impl Arbitrary for Msg {
         fn arbitrary<G: Gen>(g: &mut G) -> Self {
             use Msg::*;
