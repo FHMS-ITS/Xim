@@ -135,83 +135,6 @@ impl Controller {
         }
     }
 
-    // Moving
-
-    pub fn change_to_normal_mode(&mut self) {
-        self.model.caret = match self.model.caret {
-            Caret::Index(index) => Caret::Offset(UsizeMax::new(
-                index.value.saturating_sub(1),
-                index.get_maximum().saturating_sub(1),
-            )),
-            Caret::Offset(index) | Caret::Replace(index) | Caret::Visual(_, index) => {
-                Caret::Offset(index)
-            }
-        };
-
-        self.view.status_view.set_body(&format!(
-            "{}-- Normal ({:?}) --{}",
-            termion::style::Bold,
-            self.mode,
-            termion::style::Reset
-        )); // TODO
-    }
-
-    pub fn change_to_insert_mode(&mut self) {
-        self.model.caret = match self.model.caret {
-            Caret::Index(index) => Caret::Index(index),
-            Caret::Offset(index) | Caret::Replace(index) | Caret::Visual(_, index) => Caret::Index(
-                UsizeMax::new(index.value, index.get_maximum().saturating_add(1)),
-            ),
-        };
-
-        self.view.status_view.set_body(&format!(
-            "{}-- Insert ({:?}) --{}",
-            termion::style::Bold,
-            self.mode,
-            termion::style::Reset
-        )); // TODO
-    }
-
-    pub fn change_to_replace_mode(&mut self) {
-        self.model.caret = match self.model.caret {
-            Caret::Index(index) => Caret::Replace(UsizeMax::new(
-                index.value,
-                index.get_maximum().saturating_sub(1),
-            )),
-            Caret::Offset(index) | Caret::Replace(index) | Caret::Visual(_, index) => {
-                Caret::Replace(index)
-            }
-        };
-
-        self.view.status_view.set_body(&format!(
-            "{}-- Replace ({:?}) --{}",
-            termion::style::Bold,
-            self.mode,
-            termion::style::Reset
-        )); // TODO
-    }
-
-    pub fn change_to_command_mode(&mut self) {
-        self.view.status_view.set_body(":")
-    }
-
-    pub fn change_to_visual_mode(&mut self) {
-        self.model.caret = match self.model.caret {
-            Caret::Index(index) => Caret::Visual(
-                UsizeMax::new(index.value, index.get_maximum().saturating_sub(1)),
-                UsizeMax::new(index.value, index.get_maximum().saturating_sub(1)),
-            ),
-            Caret::Offset(index) | Caret::Replace(index) => Caret::Visual(index, index),
-            Caret::Visual(start, begin) => Caret::Visual(start, begin),
-        };
-
-        self.view.status_view.set_body(&format!(
-            "{}-- Visual --{}",
-            termion::style::Bold,
-            termion::style::Reset
-        ));
-    }
-
     // Editing
 
     pub fn insert(&mut self, value: u8) {
@@ -437,23 +360,91 @@ impl Controller {
                 }
             }
             Msg::ToNormal => {
-                self.change_to_normal_mode();
+                self.model.caret = match self.model.caret {
+                    Caret::Index(index) => Caret::Offset(UsizeMax::new(
+                        index.value.saturating_sub(1),
+                        index.get_maximum().saturating_sub(1),
+                    )),
+                    Caret::Offset(index) | Caret::Replace(index) | Caret::Visual(_, index) => {
+                        Caret::Offset(index)
+                    }
+                };
+
+                self.view.status_view.set_body(&format!(
+                    "{}-- Normal ({:?}) --{}",
+                    termion::style::Bold,
+                    self.mode,
+                    termion::style::Reset
+                )); // TODO
             }
             Msg::ToInsert(_repeat) => {
-                self.change_to_insert_mode();
+                self.model.caret = match self.model.caret {
+                    Caret::Index(index) => Caret::Index(index),
+                    Caret::Offset(index) | Caret::Replace(index) | Caret::Visual(_, index) => Caret::Index(
+                        UsizeMax::new(index.value, index.get_maximum().saturating_add(1)),
+                    ),
+                };
+
+                self.view.status_view.set_body(&format!(
+                    "{}-- Insert ({:?}) --{}",
+                    termion::style::Bold,
+                    self.mode,
+                    termion::style::Reset
+                )); // TODO
             }
             Msg::ToAppend(_repeat) => {
-                self.change_to_insert_mode();
+                self.model.caret = match self.model.caret {
+                    Caret::Index(index) => Caret::Index(index),
+                    Caret::Offset(index) | Caret::Replace(index) | Caret::Visual(_, index) => Caret::Index(
+                        UsizeMax::new(index.value, index.get_maximum().saturating_add(1)),
+                    ),
+                };
+
+                self.view.status_view.set_body(&format!(
+                    "{}-- Insert ({:?}) --{}",
+                    termion::style::Bold,
+                    self.mode,
+                    termion::style::Reset
+                )); // TODO
+
                 self.update(Msg::Move(Direction::Right));
             }
             Msg::ToReplace => {
-                self.change_to_replace_mode();
+                self.model.caret = match self.model.caret {
+                    Caret::Index(index) => Caret::Replace(UsizeMax::new(
+                        index.value,
+                        index.get_maximum().saturating_sub(1),
+                    )),
+                    Caret::Offset(index) | Caret::Replace(index) | Caret::Visual(_, index) => {
+                        Caret::Replace(index)
+                    }
+                };
+
+                self.view.status_view.set_body(&format!(
+                    "{}-- Replace ({:?}) --{}",
+                    termion::style::Bold,
+                    self.mode,
+                    termion::style::Reset
+                )); // TODO
             }
             Msg::ToVisual => {
-                self.change_to_visual_mode();
+                self.model.caret = match self.model.caret {
+                    Caret::Index(index) => Caret::Visual(
+                        UsizeMax::new(index.value, index.get_maximum().saturating_sub(1)),
+                        UsizeMax::new(index.value, index.get_maximum().saturating_sub(1)),
+                    ),
+                    Caret::Offset(index) | Caret::Replace(index) => Caret::Visual(index, index),
+                    Caret::Visual(start, begin) => Caret::Visual(start, begin),
+                };
+
+                self.view.status_view.set_body(&format!(
+                    "{}-- Visual --{}",
+                    termion::style::Bold,
+                    termion::style::Reset
+                ));
             }
             Msg::ToCommand => {
-                self.change_to_command_mode();
+                self.view.status_view.set_body(":");
             }
             Msg::ClipboardCopy => {
                 if self.model.buffer.is_empty() {
