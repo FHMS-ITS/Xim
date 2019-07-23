@@ -381,9 +381,12 @@ impl Controller {
             Msg::ToInsert(_repeat) => {
                 self.model.caret = match self.model.caret {
                     Caret::Index(index) => Caret::Index(index),
-                    Caret::Offset(index) | Caret::Replace(index) | Caret::Visual(_, index) => Caret::Index(
-                        UsizeMax::new(index.value, index.get_maximum().saturating_add(1)),
-                    ),
+                    Caret::Offset(index) | Caret::Replace(index) | Caret::Visual(_, index) => {
+                        Caret::Index(UsizeMax::new(
+                            index.value,
+                            index.get_maximum().saturating_add(1),
+                        ))
+                    }
                 };
 
                 self.view.status_view.set_body(&format!(
@@ -396,9 +399,12 @@ impl Controller {
             Msg::ToAppend(_repeat) => {
                 self.model.caret = match self.model.caret {
                     Caret::Index(index) => Caret::Index(index),
-                    Caret::Offset(index) | Caret::Replace(index) | Caret::Visual(_, index) => Caret::Index(
-                        UsizeMax::new(index.value, index.get_maximum().saturating_add(1)),
-                    ),
+                    Caret::Offset(index) | Caret::Replace(index) | Caret::Visual(_, index) => {
+                        Caret::Index(UsizeMax::new(
+                            index.value,
+                            index.get_maximum().saturating_add(1),
+                        ))
+                    }
                 };
 
                 self.view.status_view.set_body(&format!(

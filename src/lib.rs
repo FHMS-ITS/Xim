@@ -24,7 +24,11 @@ mod utils;
 mod view;
 mod vim;
 
-use {controller::{Msg, Controller}, model::Model, view::View};
+use {
+    controller::{Controller, Msg},
+    model::Model,
+    view::View,
+};
 
 pub type RawStdout = Rc<RefCell<AlternateScreen<RawTerminal<Stdout>>>>;
 
@@ -102,7 +106,7 @@ impl App {
                 }
                 Event::Resize(new_size) => {
                     ctrl.update(Msg::Resize(new_size));
-                },
+                }
                 Event::Kill => break,
             }
 
