@@ -16,8 +16,9 @@ serde_derive = "*"
 termion      = "*"
 
 [dev-dependencies]
-quickcheck        = "*"
-quickcheck_macros = "*"
+quickcheck        = "0.8"
+quickcheck_macros = "0.8"
+rand              = "0.6.5"
 
 [features]
 default = []

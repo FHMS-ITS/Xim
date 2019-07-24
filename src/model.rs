@@ -191,7 +191,7 @@ mod tests {
         };
 
         if start <= buffer.len() && end <= buffer.len() && start <= end {
-            model.edit(start, end,  &new).unwrap();
+            model.edit(start, end, &new).unwrap();
             buffer.splice(start..end, new.iter().cloned());
             buffer == model.buffer
         } else {

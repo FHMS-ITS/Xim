@@ -11,31 +11,36 @@ use termion::{self, event::Key};
 
 #[derive(Clone, Debug)]
 pub enum Msg {
-    Byte(u8),
-    Move(Direction),
+    Open(String),
     Quit,
     QuitWithoutSaving,
     Save,
     SaveAs(String),
     SaveAndQuit,
+    // ---
+    Byte(u8),
+    Move(Direction),
     Switch(Option<InputMode>),
     Delete(Option<Movement>),
+    // ---
     ToNormal,
     ToInsert(Option<usize>),
     ToAppend(Option<usize>),
     ToReplace,
     ToVisual,
     ToCommand,
-    ClipboardCopy,
-    ClipboardPaste,
+    // ---
     Yank,
     Paste(Option<Movement>),
+    ClipboardCopy,
+    ClipboardPaste,
+    // ---
     Undo,
     Redo,
+    // ---
     Show(String),
     Redraw,
     Resize((u16, u16)),
-    Open(String),
 }
 
 #[derive(Clone, Debug)]
@@ -845,6 +850,7 @@ mod tests {
     use super::*;
     use quickcheck::{Arbitrary, Gen};
     use quickcheck_macros::quickcheck;
+    use rand::seq::SliceRandom;
     use std::{cell::RefCell, io::stdout, rc::Rc};
     use termion::{raw::IntoRawMode, screen::AlternateScreen};
 
@@ -853,73 +859,75 @@ mod tests {
     impl Arbitrary for Msg {
         fn arbitrary<G: Gen>(g: &mut G) -> Self {
             use Msg::*;
-            match g.next_u32() % 19 {
-                0 => Byte(u8::arbitrary(g)),
-                1 => Move(Direction::arbitrary(g)),
-                //0 => Quit,
-                //0 => QuitWithoutSaving,
-                //0 => Save,
-                //0 => SaveAs(String),
-                //0 => SaveAndQuit,
-                2 => Switch(Option::<InputMode>::arbitrary(g)),
-                3 => Delete(Option::<Movement>::arbitrary(g)),
-                4 => ToNormal,
-                5 => ToInsert(Option::<usize>::arbitrary(g)),
-                6 => ToAppend(Option::<usize>::arbitrary(g)),
-                7 => ToReplace,
-                8 => ToVisual,
-                9 => ToCommand,
-                10 => ClipboardCopy,
-                11 => ClipboardPaste,
-                12 => Yank,
-                13 => Paste(Option::<Movement>::arbitrary(g)),
-                14 => Undo,
-                15 => Redo,
-                16 => Show(String::arbitrary(g)),
-                17 => Redraw,
-                18 => Resize(<(u16, u16)>::arbitrary(g)),
-                _ => panic!(),
-            }
+            [
+                //Open(String::arbitrary(g)),
+                Quit,
+                QuitWithoutSaving,
+                //Save,
+                //SaveAs(String::arbitrary(g)),
+                //SaveAndQuit,
+                // ---
+                Byte(u8::arbitrary(g)),
+                Move(Direction::arbitrary(g)),
+                Switch(Option::<InputMode>::arbitrary(g)),
+                Delete(Option::<Movement>::arbitrary(g)),
+                // ---
+                ToNormal,
+                ToInsert(Option::<usize>::arbitrary(g)),
+                ToAppend(Option::<usize>::arbitrary(g)),
+                ToReplace,
+                ToVisual,
+                ToCommand,
+                // ---
+                Yank,
+                Paste(Option::<Movement>::arbitrary(g)),
+                ClipboardCopy,
+                ClipboardPaste,
+                // ---
+                Undo,
+                Redo,
+                // ---
+                Show(String::arbitrary(g)),
+                Redraw,
+                Resize((u16::arbitrary(g), u16::arbitrary(g))),
+            ]
+            .choose(g)
+            .unwrap()
+            .clone()
         }
     }
 
     impl Arbitrary for Movement {
         fn arbitrary<G: Gen>(g: &mut G) -> Self {
             use Movement::*;
-            match g.next_u32() % 2 {
-                0 => Left,
-                1 => Right,
-                _ => panic!(),
-            }
+            [Left, Right].choose(g).unwrap().clone()
         }
     }
 
     impl Arbitrary for Direction {
         fn arbitrary<G: Gen>(g: &mut G) -> Self {
             use Direction::*;
-            match g.next_u32() % 7 {
-                0 => Left,
-                1 => Right,
-                2 => Up,
-                3 => Down,
+            [
+                Left,
+                Right,
+                Up,
+                Down,
                 //Start,
-                4 => Offset(usize::arbitrary(g)),
+                Offset(usize::arbitrary(g)),
                 //End,
-                5 => Newline,
-                6 => Revert,
-                _ => panic!(),
-            }
+                Newline,
+                Revert,
+            ]
+            .choose(g)
+            .unwrap()
+            .clone()
         }
     }
 
     impl Arbitrary for InputMode {
         fn arbitrary<G: Gen>(g: &mut G) -> Self {
             use InputMode::*;
-            match g.next_u32() % 2 {
-                0 => Ascii,
-                1 => Hex,
-                _ => panic!(),
-            }
+            [Ascii, Hex].choose(g).unwrap().clone()
         }
     }
 

@@ -84,7 +84,10 @@ mod tests {
         match boundary {
             0 => align_top(index, boundary) == index,
             1 => align_top(index, boundary) == index,
-            _ => align_top(index * boundary + (random % boundary), boundary) == index * boundary + (boundary - 1),
+            _ => {
+                align_top(index * boundary + (random % boundary), boundary)
+                    == index * boundary + (boundary - 1)
+            }
         }
     }
 
