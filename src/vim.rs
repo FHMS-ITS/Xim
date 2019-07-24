@@ -134,3 +134,16 @@ impl Msg {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quickcheck_macros::quickcheck;
+
+    #[quickcheck]
+    fn test_msg_parse_doesnt_panic(input: String) -> bool {
+        let _ = Msg::parse(&input);
+        true
+    }
+}
+
