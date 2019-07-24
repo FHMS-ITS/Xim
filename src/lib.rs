@@ -277,22 +277,20 @@ impl<'a> From<&'a mut UsizeMax> for usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use quickcheck_macros::quickcheck;
 
-    use quickcheck::quickcheck;
+    #[quickcheck]
+    fn test_usizemax(value: usize, max: usize, operations: Vec<(u8, usize)>) -> bool {
+        let mut value = UsizeMax::new(value, max);
 
-    quickcheck! {
-        fn test_usizemax(value: usize, max: usize, operations: Vec<(u8, usize)>) -> bool {
-            let mut value = UsizeMax::new(value, max);
-
-            for (operator, rhs) in operations {
-                match operator % 2 {
-                    0 => value += rhs,
-                    1 => value -= rhs,
-                    _ => unreachable!(),
-                }
+        for (operator, rhs) in operations {
+            match operator % 2 {
+                0 => value += rhs,
+                1 => value -= rhs,
+                _ => unreachable!(),
             }
-
-            usize::from(value) <= max
         }
+
+        usize::from(value) <= max
     }
 }

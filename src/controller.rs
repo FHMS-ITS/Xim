@@ -843,7 +843,8 @@ impl Controller {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use quickcheck::{quickcheck, Arbitrary, Gen};
+    use quickcheck::{Arbitrary, Gen};
+    use quickcheck_macros::quickcheck;
     use std::{cell::RefCell, io::stdout, rc::Rc};
     use termion::{raw::IntoRawMode, screen::AlternateScreen};
 
@@ -922,18 +923,17 @@ mod tests {
         }
     }
 
-    quickcheck! {
-        fn test_update(msgs: Vec<Msg>) -> bool {
-            let stdout = Rc::new(RefCell::new(AlternateScreen::from(
-                stdout().into_raw_mode().unwrap(),
-            )));
+    #[quickcheck]
+    fn test_update(msgs: Vec<Msg>) -> bool {
+        let stdout = Rc::new(RefCell::new(AlternateScreen::from(
+            stdout().into_raw_mode().unwrap(),
+        )));
 
-            let mut ctrl = Controller::new(Model::new(), View::new(stdout));
+        let mut ctrl = Controller::new(Model::new(), View::new(stdout));
 
-            for msg in msgs {
-                ctrl.update(msg);
-            }
-            true
+        for msg in msgs {
+            ctrl.update(msg);
         }
+        true
     }
 }

@@ -16,7 +16,8 @@ serde_derive = "*"
 termion      = "*"
 
 [dev-dependencies]
-quickcheck   = "*"
+quickcheck        = "*"
+quickcheck_macros = "*"
 
 [features]
 default = []

@@ -68,43 +68,39 @@ pub fn offset_width(max: usize) -> u16 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use quickcheck_macros::quickcheck;
 
-    use quickcheck::quickcheck;
-
-    quickcheck! {
-        fn test_align(index: u16, random: u16, boundary: u16) -> bool {
-            match boundary {
-                0 => align(index, boundary) == index,
-                1 => align(index, boundary) == index,
-                _ => align(index * boundary + (random % boundary), boundary) == index * boundary,
-            }
+    #[quickcheck]
+    fn test_align(index: u16, random: u16, boundary: u16) -> bool {
+        match boundary {
+            0 => align(index, boundary) == index,
+            1 => align(index, boundary) == index,
+            _ => align(index * boundary + (random % boundary), boundary) == index * boundary,
         }
     }
 
-    quickcheck! {
-        fn test_align_top(index: u16, random: u16, boundary: u16) -> bool {
-            match boundary {
-                0 => align_top(index, boundary) == index,
-                1 => align_top(index, boundary) == index,
-                _ => align_top(index * boundary + (random % boundary), boundary) == index * boundary + (boundary - 1),
-            }
+    #[quickcheck]
+    fn test_align_top(index: u16, random: u16, boundary: u16) -> bool {
+        match boundary {
+            0 => align_top(index, boundary) == index,
+            1 => align_top(index, boundary) == index,
+            _ => align_top(index * boundary + (random % boundary), boundary) == index * boundary + (boundary - 1),
         }
     }
 
-    quickcheck! {
-        fn test_move_window(start: usize, height: usize, index: usize) -> bool {
-            if let Some(new_start) = move_window(start, height, index) {
-                // Do not move when unnecessary...
-                if start <= index && index <= start + (height - 1) {
-                    new_start == start
-                } else {
-                    // ...and always be in range...
-                    new_start <= index && index <= new_start + height
-                }
+    #[quickcheck]
+    fn test_move_window(start: usize, height: usize, index: usize) -> bool {
+        if let Some(new_start) = move_window(start, height, index) {
+            // Do not move when unnecessary...
+            if start <= index && index <= start + (height - 1) {
+                new_start == start
             } else {
-                // If move_window returned None, the height must have been 0
-                height == 0
+                // ...and always be in range...
+                new_start <= index && index <= new_start + height
             }
+        } else {
+            // If move_window returned None, the height must have been 0
+            height == 0
         }
     }
 }

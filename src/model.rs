@@ -176,28 +176,26 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use quickcheck_macros::quickcheck;
 
-    use quickcheck::quickcheck;
+    #[quickcheck]
+    fn test_edit(buffer: Vec<u8>, start: usize, end: usize, new: Vec<u8>) -> bool {
+        let mut buffer = buffer.clone();
 
-    quickcheck! {
-        fn test_edit(buffer: Vec<u8>, start: usize, end: usize, new: Vec<u8>) -> bool {
-            let mut buffer = buffer.clone();
+        let mut model = Model {
+            path: "".into(),
+            caret: Caret::Offset(UsizeMax::new(0, buffer.len())),
+            buffer: buffer.clone(),
+            history: History::new(),
+            term_size: (0, 0),
+        };
 
-            let mut model = Model {
-                path: "".into(),
-                caret: Caret::Offset(UsizeMax::new(0, buffer.len())),
-                buffer: buffer.clone(),
-                history: History::new(),
-                term_size: (0, 0),
-            };
-
-            if start <= buffer.len() && end <= buffer.len() && start <= end {
-                model.edit(start, end,  &new).unwrap();
-                buffer.splice(start..end, new.iter().cloned());
-                buffer == model.buffer
-            } else {
-                true
-            }
+        if start <= buffer.len() && end <= buffer.len() && start <= end {
+            model.edit(start, end,  &new).unwrap();
+            buffer.splice(start..end, new.iter().cloned());
+            buffer == model.buffer
+        } else {
+            true
         }
     }
 }
