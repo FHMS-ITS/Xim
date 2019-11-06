@@ -1,6 +1,6 @@
-# Xim (untested)
+# Xim
 
-Xim is useful for simple hex editing tasks. However, it is not thoroughly tested and may consume much memory. Use at your own risc.
+Xim is useful for simple hex editing tasks. However, it will consume much memory, because the final data structure (a persistent rope) is not integrated yet. Use at your own risc.
 
 ![Screenshot](assets/xim.png)
 
@@ -48,17 +48,17 @@ $ cargo build --release
 $ ./target/release/xim <file>
 ```
 
-# Usecases
+# Incomplete collection of implemented and missing features
 
 * [x] Open/Create
 * [ ] Open/Create with `:e <file>`
 * [x] Save with `:w`
-* [ ] Save as with `:w <file>`
+* [x] Save as with `:w <file>`
 * [x] Save and exit with `:x` or `:wq`
 * [x] Exit with `:q` or `:q!`
 * [x] Statusbar (State, Position)
 * [x] Move
-* [x] Jump
+* [x] Absolute Jumps (0b..., 0o..., 0x..., int)
 * [ ] Jump to Start/End `gg`, `G`
 * [ ] Relative Jumps
 * [x] Scroll
@@ -66,13 +66,11 @@ $ ./target/release/xim <file>
 * [x] Delete
 * [x] Replace
 * [x] Visual mode
-* [x] Copy/Paste
+* [x] Yank/Paste
+* [x] Copy/Paste (from clipboard)
 * [ ] Edit in ASCII mode (partially implemented)
 * [x] Undo/Redo
 * [ ] Highlite differences
-
-# Efficiency
-
 * [ ] Portable colors
 * [ ] Optimize drawing (avoid flickering)
 * [ ] Persistent rope
