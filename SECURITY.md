@@ -1,11 +1,7 @@
 # Security Policy
 
-## Supported Versions
-
-None, really :-)
-
 ## Reporting a Vulnerability
 
-If you think you found a security issue, feel free to just open a public issue here.
+Feel free to open a public issue here if you found a security vulnerability.
 
-If, for whatever reason, you prefer to not make it public, please write a mail to poddebniak@fh-muenster.de
+If, for whatever reason, you prefer to not make it public, please write an email to poddebniak@fh-muenster.de
