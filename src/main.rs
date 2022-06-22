@@ -32,7 +32,7 @@ impl From<DocoptArgs> for Args {
     }
 }
 
-fn main() -> Result<(), Box<std::error::Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Parse arguments
     let args: DocoptArgs = Docopt::new(USAGE)
         .and_then(|d| d.version(Some(VERSION.into())).deserialize())

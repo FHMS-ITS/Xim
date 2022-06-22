@@ -24,7 +24,7 @@ pub struct InputStateMachine {
 impl InputStateMachine {
     pub fn new(mode: InputMode) -> InputStateMachine {
         InputStateMachine {
-            mode: mode,
+            mode,
             state: InputState::Incomplete(String::new()),
         }
     }
@@ -102,8 +102,8 @@ impl Msg {
     pub fn parse(cmd: &str) -> Result<Msg, &'static str> {
         use self::Msg::*;
 
-        if cmd.starts_with("w ") {
-            return Ok(SaveAs(cmd[2..].trim().into()));
+        if let Some(stripped) = cmd.strip_prefix("w ") {
+            return Ok(SaveAs(stripped.trim().into()));
         }
 
         match cmd {

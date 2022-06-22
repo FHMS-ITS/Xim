@@ -22,7 +22,7 @@ impl<T: Clone> History<T> {
     }
 
     pub fn undo(&mut self) -> Option<T> {
-        if !(self.done.len() > 1) {
+        if self.done.len() <= 1 {
             return None;
         }
 

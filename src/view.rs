@@ -67,7 +67,7 @@ impl View {
                 origin: (1, 1),
                 dimens: (16, 16),
             },
-            stdout: stdout,
+            stdout,
             hex_view,
             status_view,
         }
@@ -134,7 +134,7 @@ impl HexView {
                 origin: (1, 1),
                 dimens: (16, 16),
             },
-            stdout: stdout,
+            stdout,
         }
     }
 
@@ -181,9 +181,8 @@ impl HexView {
         write!(stdout, "{}", Fg(Red))?;
         write!(
             stdout,
-            "{}{}",
+            "{}0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f",
             Goto(offset_width + 4, 1),
-            "0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f"
         )?;
         write!(stdout, "{}", Fg(ColorReset))?;
 
@@ -236,12 +235,11 @@ impl HexView {
                 let index = usize::from(index);
                 write!(
                     stdout,
-                    "{}{}",
+                    "{}|",
                     Goto(
                         hex_area.origin.0 + ((index % 16) as u16) * 3 - 1,
                         hex_area.origin.1 + ((index - self.scroll_start) / 16) as u16
                     ),
-                    "|"
                 )
                 .unwrap();
 
@@ -425,7 +423,7 @@ impl StatusView {
                 origin: (1, 1),
                 dimens: (16, 2),
             },
-            stdout: stdout,
+            stdout,
         }
     }
 
@@ -455,12 +453,13 @@ impl StatusView {
 
         write!(
             stdout,
-            "{}{}{}{}{}",
+            "{}{}{}{:<pad$}{}",
             Goto(x, y),
             ClearCurrentLine,
             Invert,
-            format!("{:<pad$}", self.head, pad = (w as usize)),
-            NoInvert
+            self.head,
+            NoInvert,
+            pad = (w as usize),
         )?;
         write!(
             stdout,

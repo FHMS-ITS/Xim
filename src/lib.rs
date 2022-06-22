@@ -48,14 +48,14 @@ pub struct App {
 impl App {
     pub fn new(args: Args) -> App {
         App {
-            args: args,
+            args,
             stdout: Rc::new(RefCell::new(AlternateScreen::from(
                 stdout().into_raw_mode().unwrap(),
             ))),
         }
     }
 
-    pub fn run(mut self) -> Result<(), Box<Error>> {
+    pub fn run(mut self) -> Result<(), Box<dyn Error>> {
         self.setup_terminal()?;
 
         let events = {
@@ -79,7 +79,7 @@ impl App {
             });
 
             // Receive keypress events
-            let send_2 = send.clone();
+            let send_2 = send;
             thread::spawn(move || {
                 for c in stdin().keys() {
                     send_2.send(Event::Key(c.unwrap())).unwrap();
@@ -114,7 +114,7 @@ impl App {
         Ok(())
     }
 
-    fn setup_terminal(&mut self) -> Result<(), Box<Error>> {
+    fn setup_terminal(&mut self) -> Result<(), Box<dyn Error>> {
         let mut stdout = self.stdout.borrow_mut();
         write!(stdout, "{}", termion::cursor::Hide)?;
         write!(stdout, "{}", termion::clear::All)?;
@@ -122,7 +122,7 @@ impl App {
         Ok(())
     }
 
-    fn teardown_terminal(&mut self) -> Result<(), Box<Error>> {
+    fn teardown_terminal(&mut self) -> Result<(), Box<dyn Error>> {
         let mut stdout = self.stdout.borrow_mut();
         write!(stdout, "{}", termion::clear::All)?;
         write!(stdout, "{}", termion::cursor::Show)?;
@@ -140,12 +140,12 @@ impl Drop for App {
 }
 
 pub trait Ascii {
-    fn to_printable(self: Self) -> char;
+    fn to_printable(self) -> char;
 }
 
 impl Ascii for u8 {
     fn to_printable(self: u8) -> char {
-        if self >= 32 && self <= 126 {
+        if (32..=126).contains(&self) {
             self as char
         } else {
             '.'

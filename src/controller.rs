@@ -90,8 +90,8 @@ impl Controller {
     pub fn new(model: Model, view: View) -> Controller {
         Controller {
             state: VimState::Normal,
-            model: model,
-            view: view,
+            model,
+            view,
             mode: InputMode::Hex,
             yank: None,
         }
@@ -535,7 +535,7 @@ impl Controller {
                 self.view.hex_view.scroll_to(self.model.get_index());
             }
             Msg::Show(msg) => {
-                self.view.status_view.set_body(&format!("{}", &msg));
+                self.view.status_view.set_body(&msg);
             }
             Msg::Redraw => {
                 if let Err(error) = self.view.draw(&self.model) {
@@ -809,7 +809,7 @@ impl Controller {
                     match Msg::parse(&cmd) {
                         Ok(cmd) => run = self.update(cmd),
                         Err(msg) => {
-                            self.update(Msg::Show(format!("{}", &msg)));
+                            self.update(Msg::Show(msg.to_string()));
                         }
                     }
                     VimState::Normal
