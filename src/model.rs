@@ -1,10 +1,10 @@
-use crate::{history::History, UsizeMax};
-
 use std::{
     fs::{File, OpenOptions},
     io::{Read, Result as IoResult, Write},
     mem::swap,
 };
+
+use crate::{history::History, UsizeMax};
 
 #[derive(Clone, Debug)]
 pub enum Caret {
@@ -175,8 +175,9 @@ impl Model {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use quickcheck_macros::quickcheck;
+
+    use super::*;
 
     #[quickcheck]
     fn test_edit(buffer: Vec<u8>, start: usize, end: usize, new: Vec<u8>) -> bool {

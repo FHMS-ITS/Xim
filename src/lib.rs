@@ -24,11 +24,9 @@ mod utils;
 mod view;
 mod vim;
 
-use {
-    controller::{Controller, Msg},
-    model::Model,
-    view::View,
-};
+use controller::{Controller, Msg};
+use model::Model;
+use view::View;
 
 pub type RawStdout = Rc<RefCell<AlternateScreen<RawTerminal<Stdout>>>>;
 
@@ -276,8 +274,9 @@ impl<'a> From<&'a mut UsizeMax> for usize {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use quickcheck_macros::quickcheck;
+
+    use super::*;
 
     #[quickcheck]
     fn test_usizemax(value: usize, max: usize, operations: Vec<(u8, usize)>) -> bool {

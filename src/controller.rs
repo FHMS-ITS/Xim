@@ -1,3 +1,7 @@
+use std::{convert::TryFrom, mem::swap};
+
+use termion::{self, event::Key};
+
 use crate::{
     model::{Caret, Model},
     utils::{read_from_clipboard, save_to_clipboard},
@@ -5,9 +9,6 @@ use crate::{
     vim::*,
     UsizeMax,
 };
-use std::convert::TryFrom;
-use std::mem::swap;
-use termion::{self, event::Key};
 
 #[derive(Clone, Debug)]
 pub enum Msg {
@@ -837,12 +838,14 @@ impl Controller {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::{cell::RefCell, io::stdout, rc::Rc};
+
     use quickcheck::{Arbitrary, Gen};
     use quickcheck_macros::quickcheck;
     use rand::seq::SliceRandom;
-    use std::{cell::RefCell, io::stdout, rc::Rc};
     use termion::{raw::IntoRawMode, screen::AlternateScreen};
+
+    use super::*;
 
     impl Arbitrary for Msg {
         fn arbitrary<G: Gen>(g: &mut G) -> Self {

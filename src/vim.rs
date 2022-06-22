@@ -1,6 +1,6 @@
-use crate::controller::{Direction, Msg};
-
 use termion::event::Key::{self, Backspace, Char};
+
+use crate::controller::{Direction, Msg};
 
 #[derive(Copy, Clone, Debug)]
 pub enum InputMode {
@@ -137,8 +137,9 @@ impl Msg {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use quickcheck_macros::quickcheck;
+
+    use super::*;
 
     #[quickcheck]
     fn test_msg_parse_doesnt_panic(input: String) -> bool {
@@ -146,4 +147,3 @@ mod tests {
         true
     }
 }
-

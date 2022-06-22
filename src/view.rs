@@ -1,9 +1,3 @@
-use crate::{
-    model::{Caret, Model},
-    utils::{align, align_top, move_window, offset_width},
-    Ascii, RawStdout,
-};
-
 use std::{
     cmp::{max, min},
     io::{Result as IoResult, Write},
@@ -15,6 +9,12 @@ use termion::{
     color::{Fg, Red, Reset as ColorReset},
     cursor::Goto,
     style::{Bold, Invert, NoInvert, Reset as StyleReset, Underline},
+};
+
+use crate::{
+    model::{Caret, Model},
+    utils::{align, align_top, move_window, offset_width},
+    Ascii, RawStdout,
 };
 
 fn chunks_indices(mut start: u16, end: u16, size: u16) -> Vec<(u16, u16)> {

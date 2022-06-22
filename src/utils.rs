@@ -67,8 +67,9 @@ pub fn offset_width(max: usize) -> u16 {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use quickcheck_macros::quickcheck;
+
+    use super::*;
 
     #[quickcheck]
     fn test_align(index: u16, random: u16, boundary: u16) -> bool {
